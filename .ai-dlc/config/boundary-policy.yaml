@@ -1,0 +1,67 @@
+# Boundary policy: what the AI may reuse, extend, rebuild, delete or must ignore.
+# Enforced mechanically by .ai-dlc/tools/boundary-guard.ts (git diff vs. the run baseline).
+# When several zones match a path, the most restrictive wins:
+#   immutable > ignored > extensible > deletable > rebuildable
+version: 1
+
+# Changed paths that match no zone: deny (violation) | allow
+unclassified: deny
+
+zones:
+  immutable:
+    description: Reuse by import; never edit, add, rename or delete files here.
+    paths:
+      - src/app/core/**
+      - src/app/shared/hardware-bridge/**
+      - src/app/shared/ui/**
+      - src/styles/base-panel.scss
+      - src/main.ts
+      - src/index.html
+      - angular.json
+      - tsconfig*.json
+      - package.json
+      - package-lock.json
+      - eslint.config.js
+      # The harness itself and the human inputs
+      - .ai-dlc/config/**
+      - .ai-dlc/inputs/**
+      - .ai-dlc/tools/**
+      - .ai-dlc/references/**
+      - .github/**
+      - AGENTS.md
+      - CLAUDE.md
+
+  extensible:
+    description: Append only. Add routes, providers or menu entries; existing lines must stay unchanged.
+    paths:
+      - src/app/app.routes.ts
+      - src/app/app.config.ts
+      - src/app/features/home/home-page.ts
+      - src/environments/**
+
+  rebuildable:
+    description: Implement or rebuild freely (components, services, state, unit tests).
+    paths:
+      - src/app/features/network-settings/**
+      - src/app/api/network/**
+      - src/app/features/home/home-page.spec.ts
+      # Harness outputs (reports, generated tests) are always writable
+      - .ai-dlc/outputs/**
+
+  deletable:
+    description: Obsolete code that may be deleted or replaced.
+    paths:
+      - src/app/features/legacy-*/**
+      - src/app/mocks/deprecated-*
+
+  ignored:
+    description: Out of scope for this change; excluded from prompts and must not be touched.
+    paths:
+      - dist/**
+      - coverage/**
+      - node_modules/**
+      - .angular/**
+      - public/**
+      - e2e/**
+      - docs/**
+      - specs/**

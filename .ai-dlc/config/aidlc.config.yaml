@@ -1,0 +1,115 @@
+# AI-DLC harness configuration. Validated by .ai-dlc/tools/lib/config.ts (zod).
+version: 1
+
+project:
+  name: front-panel
+  # Angular CLI project name in angular.json
+  angularProject: front-panel
+  # Fallback baseline for boundary checks when no snapshot exists (npm run aidlc:guard)
+  baseRef: HEAD
+
+output:
+  # Language of human-facing outputs (reverse design docs, QCD report commentary): ja | en
+  language: ja
+
+loop:
+  # N: upper bound of self-healing iterations. Override: npm run aidlc:run -- --max-iterations 5
+  maxIterations: 5
+  # Revert immutable / ignored / unclassified changes and removed extensible lines automatically
+  autoRevertBoundaryViolations: true
+  # Refuse to start a real (non dry-run) loop with uncommitted changes (--allow-dirty overrides)
+  requireCleanWorkingTree: true
+
+copilot:
+  # GitHub Copilot CLI (npm install -g @github/copilot). Verified with 1.0.114.
+  command: copilot
+  model: auto
+  timeoutMinutes: 60
+  # Short instruction passed with -p. The full context is written to {promptFile}.
+  promptTemplate: >-
+    Read the file {promptFile} completely and carry out the task it describes,
+    following the referenced skills in .github/skills/. Work autonomously until it is done.
+  # Placeholders: {prompt} {promptFile} {model} {usageFile} {transcriptFile} {logDir}
+  # Permission rules: `copilot help permissions`. Deny rules win over allow rules.
+  args:
+    - -p
+    - '{prompt}'
+    - --model
+    - '{model}'
+    - --trust-folder
+    - --no-ask-user
+    - --no-color
+    - --silent
+    - --usage-output-file
+    - '{usageFile}'
+    - --share
+    - '{transcriptFile}'
+    - --log-dir
+    - '{logDir}'
+    - --allow-tool
+    - write
+    - --allow-tool
+    - shell(npm:*)
+    - --allow-tool
+    - shell(npx:*)
+    - --allow-tool
+    - shell(node:*)
+    - --allow-tool
+    - shell(git status:*)
+    - --allow-tool
+    - shell(git diff:*)
+    - --allow-tool
+    - shell(git log:*)
+    - --allow-tool
+    - shell(git rm:*)
+    - --deny-tool
+    - shell(git push)
+    - --deny-tool
+    - shell(git commit)
+    - --deny-tool
+    - shell(git reset)
+    - --deny-tool
+    - shell(git checkout)
+    - --deny-tool
+    - shell(git clean)
+    - --deny-tool
+    - shell(git rebase)
+
+gates:
+  build:
+    command: [npx, ng, build, --configuration, development]
+    timeoutMinutes: 15
+  lint:
+    command: [npx, ng, lint]
+    timeoutMinutes: 10
+  unit:
+    command: [npx, ng, test, --no-watch, --coverage]
+    timeoutMinutes: 20
+    coverage:
+      summaryFile: coverage/front-panel/coverage-summary.json
+      thresholds: { statements: 80, branches: 70, functions: 80, lines: 80 }
+  subsystem:
+    command: [npx, playwright, test, --config, .ai-dlc/tools/playwright.subsystem.config.ts]
+    timeoutMinutes: 30
+    reportFile: .ai-dlc/outputs/generated-tests/report/results.json
+    requireAllCasesCovered: true
+    minPassRate: 1.0
+
+excel:
+  # Empty = every sheet with a recognizable header row
+  sheets: []
+  # Extra header names per field, merged with the built-in English / Japanese aliases
+  headerAliases: {}
+
+qcd:
+  currency: JPY
+  # Engineer cost per hour (used when human-qcd.json does not set cost.hourlyRate)
+  humanHourlyRate: 8000
+  # Cost of one Copilot AI credit / premium request in `currency` — set these from your contract
+  aiCreditUnitCost: 6
+  premiumRequestUnitCost: 6
+  # Human effort spent on the AI-DLC run itself (hours)
+  aiDlcHumanHours:
+    inputPreparation: 4
+    review: 4
+    other: 0

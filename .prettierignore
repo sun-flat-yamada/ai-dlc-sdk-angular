@@ -1,0 +1,10 @@
+dist
+coverage
+.angular
+node_modules
+package-lock.json
+.ai-dlc/outputs
+.ai-dlc/config/schemas
+playwright-report
+test-results
+*.md

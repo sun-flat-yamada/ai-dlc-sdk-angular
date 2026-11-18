@@ -1,0 +1,71 @@
+name: 🐛 Bug report
+description: Report a defect in the harness, the skills or the sample application
+title: '[Bug]: '
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. **Never paste tokens, credentials, customer specifications or internal device documents.**
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: v0.1.0 or abc1234
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - orchestrator / loop
+        - copilot-cli-adapter
+        - boundary-guard
+        - excel-to-test-ast
+        - validate-inputs (ui-bindings)
+        - gate-runner
+        - qcd-calculator
+        - reverse docs
+        - skills (.github/skills)
+        - sample Angular app
+        - install into an existing repository
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node.js, Angular CLI, Copilot CLI (`copilot --version`)
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1. `npm run ...`
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redacted)
+      description: Relevant part of the console output or `.ai-dlc/outputs/telemetry/<run>/...`
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed secrets, personal data and confidential specifications from this report.
+          required: true

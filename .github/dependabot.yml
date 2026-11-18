@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'chore(deps)'
+    labels: [dependencies]
+    groups:
+      angular:
+        patterns: ['@angular/*', '@angular-devkit/*', 'angular-eslint', '@angular-eslint/*', 'typescript']
+      test:
+        patterns: ['vitest', '@vitest/*', '@playwright/test', 'jsdom']
+      lint:
+        patterns: ['eslint', '@eslint/*', 'typescript-eslint', 'prettier']
+    ignore:
+      # Angular pins the TypeScript minor; update it together with Angular.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci(deps)'
+    labels: [dependencies, github-actions]

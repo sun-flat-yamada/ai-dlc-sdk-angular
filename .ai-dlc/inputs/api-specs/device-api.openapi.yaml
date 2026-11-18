@@ -1,0 +1,107 @@
+openapi: 3.1.1
+info:
+  title: Front panel device REST API (sample)
+  version: 1.0.0
+  description: |
+    REST API served by the device firmware to the front-panel GUI.
+    Errors use the `Error` body; HTTP 400 adds `fieldErrors` keyed by request field name.
+servers:
+  - url: /api/v1
+paths:
+  /status:
+    get:
+      operationId: getPanelStatus
+      summary: Device operating state (polled by the status bar)
+      x-ui-binding: shared
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PanelStatus' }
+  /network/ipv4:
+    get:
+      operationId: getIpv4Settings
+      summary: Current IPv4 settings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ipv4Settings' }
+        '503':
+          $ref: '#/components/responses/Busy'
+    put:
+      operationId: putIpv4Settings
+      summary: Update the IPv4 settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Ipv4Settings' }
+      responses:
+        '200':
+          description: Saved. Returns the applied settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ipv4Settings' }
+        '400':
+          description: Invalid field values
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '503':
+          $ref: '#/components/responses/Busy'
+  /network/link:
+    get:
+      operationId: getNetworkLink
+      summary: LAN link state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NetworkLink' }
+components:
+  responses:
+    Busy:
+      description: The device is busy and cannot accept the request now.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    PanelStatus:
+      type: object
+      required: [deviceName, firmwareVersion, state, alerts]
+      properties:
+        deviceName: { type: string }
+        firmwareVersion: { type: string }
+        state: { type: string, enum: [ready, busy, error] }
+        alerts: { type: array, items: { type: string } }
+    Ipv4Settings:
+      type: object
+      required: [dhcp, address, subnetMask, gateway]
+      properties:
+        dhcp: { type: boolean }
+        address: { type: string, format: ipv4, examples: ['192.168.0.10'] }
+        subnetMask: { type: string, format: ipv4, examples: ['255.255.255.0'] }
+        gateway: { type: string, format: ipv4, examples: ['192.168.0.1'] }
+    NetworkLink:
+      type: object
+      required: [link]
+      properties:
+        link: { type: string, enum: [up, down] }
+        speedMbps: { type: integer, examples: [100] }
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            fieldErrors:
+              type: object
+              additionalProperties: { type: string }

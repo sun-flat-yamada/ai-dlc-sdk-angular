@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Quality gate (app + harness)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NG_CLI_ANALYTICS: 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Secret & privacy scan
+        run: npm run secret-scan
+
+      - name: Typecheck (app, specs, harness)
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests with coverage (app)
+        run: npm run test:coverage
+
+      - name: Harness tests
+        run: npm run tools:test
+
+      - name: Build
+        run: npm run build
+
+      - name: Gate 0 — validate sample inputs
+        run: |
+          npm run aidlc:parse-excel
+          npm run aidlc:validate-inputs
+
+      - name: Harness dry-run (3 iterations, no Copilot call)
+        run: npm run aidlc:run -- --max-iterations 3 --dry-run
+
+      - name: Upload harness reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: aidlc-dry-run-reports
+          path: |
+            .ai-dlc/outputs/reports/
+            .ai-dlc/outputs/reverse-docs/
+            .ai-dlc/outputs/telemetry/run-history.json
+          if-no-files-found: ignore
+
+  e2e:
+    name: E2E smoke (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NG_CLI_ANALYTICS: 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        run: npm run e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore

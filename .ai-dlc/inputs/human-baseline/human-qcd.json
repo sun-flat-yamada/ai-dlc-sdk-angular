@@ -1,0 +1,28 @@
+{
+  "project": "front-panel",
+  "requirementId": "REQ-NET",
+  "description": "SAMPLE values. Replace with the actual records of the same requirement developed by humans.",
+  "quality": {
+    "subsystemTestFirstPassRate": 0.75,
+    "subsystemTestFinalPassRate": 1.0,
+    "unitTestCoverage": { "statements": 78.4, "branches": 66.0, "lines": 79.1 },
+    "staticAnalysisWarnings": 7,
+    "defectsFound": 6,
+    "sizeKloc": 0.9
+  },
+  "cost": {
+    "effortHours": {
+      "design": 12,
+      "implementation": 24,
+      "unitTest": 14,
+      "subsystemTest": 10,
+      "review": 6
+    },
+    "hourlyRate": 8000,
+    "currency": "JPY"
+  },
+  "delivery": {
+    "leadTimeHours": 66,
+    "calendarDays": 9
+  }
+}

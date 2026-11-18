@@ -1,0 +1,377 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "apiSpecs": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "screens": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string",
+            "format": "starts_with",
+            "pattern": "^\\/.*"
+          },
+          "requirements": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "design": {
+            "type": "string"
+          },
+          "states": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            }
+          },
+          "initial": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "onEnter": {
+            "type": "object",
+            "properties": {
+              "transition": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "show": {
+                "type": "string"
+              },
+              "feedback": {
+                "type": "string",
+                "enum": [
+                  "click",
+                  "accept",
+                  "error"
+                ]
+              },
+              "call": {
+                "type": "string"
+              },
+              "request": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "params": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "navigate": {
+                "type": "string"
+              },
+              "success": {
+                "type": "object",
+                "properties": {
+                  "transition": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*$"
+                  },
+                  "show": {
+                    "type": "string"
+                  },
+                  "feedback": {
+                    "type": "string",
+                    "enum": [
+                      "click",
+                      "accept",
+                      "error"
+                    ]
+                  }
+                }
+              },
+              "errors": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "enum": [
+                    "validation",
+                    "busy",
+                    "not-found",
+                    "timeout",
+                    "offline",
+                    "server",
+                    "default"
+                  ]
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "transition": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]*$"
+                    },
+                    "show": {
+                      "type": "string"
+                    },
+                    "feedback": {
+                      "type": "string",
+                      "enum": [
+                        "click",
+                        "accept",
+                        "error"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "elements": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "button",
+                    "toggle",
+                    "input",
+                    "select",
+                    "indicator",
+                    "text",
+                    "list",
+                    "container"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "bind": {
+                  "type": "string"
+                },
+                "validate": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
+                },
+                "enabledWhen": {
+                  "type": "string"
+                },
+                "visibleWhen": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "call": {
+                      "type": "string"
+                    },
+                    "poll": {
+                      "type": "string",
+                      "pattern": "^\\d+(ms|s)$"
+                    },
+                    "path": {
+                      "default": "$",
+                      "type": "string",
+                      "pattern": "^\\$(\\.[A-Za-z_][\\w]*)*$"
+                    }
+                  },
+                  "required": [
+                    "call"
+                  ]
+                },
+                "map": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "on": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "enum": [
+                      "press",
+                      "longPress",
+                      "change",
+                      "submit"
+                    ]
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "transition": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]*$"
+                      },
+                      "show": {
+                        "type": "string"
+                      },
+                      "feedback": {
+                        "type": "string",
+                        "enum": [
+                          "click",
+                          "accept",
+                          "error"
+                        ]
+                      },
+                      "call": {
+                        "type": "string"
+                      },
+                      "request": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "params": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "navigate": {
+                        "type": "string"
+                      },
+                      "success": {
+                        "type": "object",
+                        "properties": {
+                          "transition": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9-]*$"
+                          },
+                          "show": {
+                            "type": "string"
+                          },
+                          "feedback": {
+                            "type": "string",
+                            "enum": [
+                              "click",
+                              "accept",
+                              "error"
+                            ]
+                          }
+                        }
+                      },
+                      "errors": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "enum": [
+                            "validation",
+                            "busy",
+                            "not-found",
+                            "timeout",
+                            "offline",
+                            "server",
+                            "default"
+                          ]
+                        },
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "transition": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9-]*$"
+                            },
+                            "show": {
+                              "type": "string"
+                            },
+                            "feedback": {
+                              "type": "string",
+                              "enum": [
+                                "click",
+                                "accept",
+                                "error"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            }
+          },
+          "static": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            }
+          }
+        },
+        "required": [
+          "title",
+          "route",
+          "design",
+          "states",
+          "initial",
+          "elements"
+        ]
+      }
+    }
+  },
+  "required": [
+    "version",
+    "apiSpecs",
+    "screens"
+  ],
+  "title": "AI-DLC ui-bindings.yaml",
+  "description": "Binds design HTML elements (data-ui-id) to REST API operations (OpenAPI operationId) and screen states."
+}

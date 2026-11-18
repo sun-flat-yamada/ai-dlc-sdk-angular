@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=../../config/schemas/ui-bindings.schema.json
+#
+# UI <-> REST API bindings: the contract between the design HTML (data-ui-id)
+# and the OpenAPI document (operationId). Checked by `npm run aidlc:validate-inputs` (Gate 0).
+version: 1
+apiSpecs:
+  - device-api.openapi.yaml
+
+screens:
+  network-settings:
+    title: ネットワーク設定
+    route: /settings/network
+    requirements: [REQ-NET-001, REQ-NET-002, REQ-NET-003, REQ-NET-004, REQ-NET-005, REQ-NET-006, REQ-NET-007, REQ-NET-008, REQ-NET-009]
+    design: network-settings.html
+    states: [loading, editing, saving, saved, error]
+    initial: loading
+    onEnter:
+      call: getIpv4Settings
+      success: { transition: editing }
+      errors:
+        busy: { transition: error, show: message.loadFailed }
+        default: { transition: error, show: message.loadFailed }
+    static: [network-settings-page, network-title]
+    elements:
+      loading-indicator:
+        kind: text
+        visibleWhen: "state == 'loading'"
+      link-led:
+        kind: indicator
+        description: LAN link LED
+        source: { call: getNetworkLink, poll: 5s, path: $.link }
+        map: { up: led--on, down: led--off }
+      link-label:
+        kind: text
+        source: { call: getNetworkLink, poll: 5s, path: $.link }
+        map: { up: 'リンク: 接続', down: 'リンク: 切断' }
+      dhcp-toggle:
+        kind: toggle
+        bind: body.dhcp
+        enabledWhen: "state == 'editing'"
+      ip-address:
+        kind: input
+        bind: body.address
+        validate: ipv4
+        enabledWhen: "state == 'editing' && !form.dhcp"
+      ip-address-error:
+        kind: text
+        description: Shows the local validation message or fieldErrors.address from HTTP 400
+        visibleWhen: "form.address.invalid || response.fieldErrors.address"
+      subnet-mask:
+        kind: input
+        bind: body.subnetMask
+        validate: ipv4
+        enabledWhen: "state == 'editing' && !form.dhcp"
+      subnet-mask-error:
+        kind: text
+        visibleWhen: "form.subnetMask.invalid || response.fieldErrors.subnetMask"
+      gateway:
+        kind: input
+        bind: body.gateway
+        validate: ipv4
+        enabledWhen: "state == 'editing' && !form.dhcp"
+      gateway-error:
+        kind: text
+        visibleWhen: "form.gateway.invalid || response.fieldErrors.gateway"
+      status-message:
+        kind: text
+        description: 'message.saved = "保存しました" (message--success), message.busy = "機器が動作中のため保存できません" (message--warning), message.loadFailed / message.failed = "通信に失敗しました" (message--error)'
+      cancel-button:
+        kind: button
+        on:
+          press: { navigate: / }
+      save-button:
+        kind: button
+        enabledWhen: "state == 'editing' && form.valid && device.isOperable"
+        on:
+          press:
+            call: putIpv4Settings
+            request:
+              dhcp: form.dhcp
+              address: form.address
+              subnetMask: form.subnetMask
+              gateway: form.gateway
+            transition: saving
+            success: { transition: saved, show: message.saved, feedback: accept }
+            errors:
+              validation: { transition: editing, show: fieldErrors, feedback: error }
+              busy: { transition: editing, show: message.busy, feedback: error }
+              default: { transition: editing, show: message.failed, feedback: error }

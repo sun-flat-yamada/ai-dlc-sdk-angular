@@ -1,0 +1,98 @@
+{
+  "name": "ai-dlc-sdk-angular",
+  "version": "0.1.0",
+  "description": "In-repository AI-DLC SDK & harness for Angular embedded front-panel GUIs: GitHub Copilot CLI drives requirements to unit tests, an Excel-derived subsystem test gate closes the loop (max N iterations), then reverse-generates design docs and benchmarks QCD against human development.",
+  "private": true,
+  "license": "MIT",
+  "author": "sun-flat-yamada",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sun-flat-yamada/ai-dlc-sdk-angular.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sun-flat-yamada/ai-dlc-sdk-angular/issues"
+  },
+  "homepage": "https://github.com/sun-flat-yamada/ai-dlc-sdk-angular#readme",
+  "keywords": [
+    "ai-dlc",
+    "github-copilot-cli",
+    "agent-skills",
+    "angular",
+    "embedded-gui",
+    "front-panel",
+    "quality-gate",
+    "playwright",
+    "qcd"
+  ],
+  "type": "module",
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
+  "packageManager": "npm@11.20.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test --no-watch",
+    "test:coverage": "ng test --no-watch --coverage",
+    "lint": "ng lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit && tsc -p .ai-dlc/tools/tsconfig.json --noEmit",
+    "tools:test": "vitest run --config .ai-dlc/tools/vitest.config.ts",
+    "secret-scan": "tsx scripts/scan-secrets.ts",
+    "gate": "npm run typecheck && npm run lint && npm test && npm run tools:test && npm run secret-scan && npm run build",
+    "aidlc:init-check": "tsx .ai-dlc/tools/orchestrator.ts --mode validate-env",
+    "aidlc:validate-inputs": "tsx .ai-dlc/tools/validate-inputs.ts",
+    "aidlc:parse-excel": "tsx .ai-dlc/tools/excel-to-test-ast.ts",
+    "aidlc:guard": "tsx .ai-dlc/tools/boundary-guard.ts",
+    "aidlc:gate": "tsx .ai-dlc/tools/gate-runner.ts",
+    "aidlc:run": "tsx .ai-dlc/tools/orchestrator.ts --mode full-loop",
+    "aidlc:reverse-doc": "tsx .ai-dlc/tools/orchestrator.ts --mode reverse-doc",
+    "aidlc:qcd": "tsx .ai-dlc/tools/qcd-calculator.ts",
+    "aidlc:sample-excel": "tsx .ai-dlc/tools/samples/generate-sample-excel.ts",
+    "aidlc:install": "tsx .ai-dlc/tools/install.ts",
+    "aidlc:schemas": "tsx .ai-dlc/tools/write-schemas.ts"
+  },
+  "dependencies": {
+    "@angular/common": "^22.3.0",
+    "@angular/compiler": "^22.3.0",
+    "@angular/core": "^22.3.0",
+    "@angular/forms": "^22.3.0",
+    "@angular/platform-browser": "^22.3.0",
+    "@angular/router": "^22.3.0",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.9.1"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.7",
+    "@angular/cli": "^22.2.7",
+    "@angular/compiler-cli": "^22.3.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
+    "@types/cross-spawn": "^6.0.6",
+    "@types/node": "^26.6.6",
+    "@types/picomatch": "^4.0.3",
+    "@vitest/coverage-v8": "^5.1.1",
+    "angular-eslint": "^22.8.0",
+    "cross-spawn": "^7.0.6",
+    "eslint": "^10.15.0",
+    "exceljs": "^4.4.0",
+    "jsdom": "^31.0.1",
+    "picomatch": "^4.0.7",
+    "prettier": "^3.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
+  }
+}

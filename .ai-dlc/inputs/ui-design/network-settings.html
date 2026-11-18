@@ -1,0 +1,50 @@
+<!--
+  Design mock: Network settings (800x480 front panel, below the 40px status bar).
+  Every element that the implementation must reproduce carries data-ui-id="<ui-id>".
+  The ui-ids are the contract with ui-bindings.yaml and the Excel subsystem tests (@ui-id).
+  Values shown here are placeholders.
+-->
+<link rel="stylesheet" href="network-settings.css" />
+<section class="net" data-ui-id="network-settings-page">
+  <header class="net__header">
+    <h1 class="net__title" data-ui-id="network-title">ネットワーク設定</h1>
+    <span class="net__link">
+      <span class="led led--on" data-ui-id="link-led" aria-hidden="true"></span>
+      <span data-ui-id="link-label">リンク: 接続</span>
+    </span>
+  </header>
+
+  <p class="net__loading" data-ui-id="loading-indicator">読込中…</p>
+
+  <form class="net__form">
+    <label class="net__row net__row--toggle">
+      <span>DHCP</span>
+      <input type="checkbox" class="toggle" data-ui-id="dhcp-toggle" />
+    </label>
+
+    <label class="net__row">
+      <span>IP アドレス</span>
+      <input type="text" inputmode="decimal" class="field" data-ui-id="ip-address" value="192.168.0.10" />
+    </label>
+    <p class="field-error" data-ui-id="ip-address-error">IPアドレスの形式が正しくありません</p>
+
+    <label class="net__row">
+      <span>サブネットマスク</span>
+      <input type="text" inputmode="decimal" class="field" data-ui-id="subnet-mask" value="255.255.255.0" />
+    </label>
+    <p class="field-error" data-ui-id="subnet-mask-error">サブネットマスクの形式が正しくありません</p>
+
+    <label class="net__row">
+      <span>ゲートウェイ</span>
+      <input type="text" inputmode="decimal" class="field" data-ui-id="gateway" value="192.168.0.1" />
+    </label>
+    <p class="field-error" data-ui-id="gateway-error">ゲートウェイの形式が正しくありません</p>
+  </form>
+
+  <p class="message message--success" data-ui-id="status-message" role="status">保存しました</p>
+
+  <footer class="net__actions">
+    <button type="button" class="btn" data-ui-id="cancel-button">キャンセル</button>
+    <button type="button" class="btn btn--primary" data-ui-id="save-button">保存</button>
+  </footer>
+</section>

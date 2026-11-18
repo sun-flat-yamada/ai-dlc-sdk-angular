@@ -1,0 +1,57 @@
+// Base design tokens for the 800x480 embedded front panel.
+// IMMUTABLE: shared by every screen. Do not edit from feature work; extend in feature styles instead.
+
+:root {
+  --panel-width: 800px;
+  --panel-height: 480px;
+  --panel-status-bar-height: 40px;
+
+  --panel-color-bg: #10151c;
+  --panel-color-surface: #1c2430;
+  --panel-color-surface-raised: #263142;
+  --panel-color-text: #f2f5f8;
+  --panel-color-text-muted: #9aa7b6;
+  --panel-color-primary: #2f8cff;
+  --panel-color-success: #2fbf71;
+  --panel-color-warning: #ffb020;
+  --panel-color-danger: #ff5a5a;
+
+  --panel-font-family: 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif;
+  --panel-font-size-sm: 14px;
+  --panel-font-size-md: 18px;
+  --panel-font-size-lg: 24px;
+
+  --panel-touch-target-min: 48px;
+  --panel-radius: 8px;
+  --panel-gap: 12px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: var(--panel-width);
+  height: var(--panel-height);
+  overflow: hidden;
+  background: var(--panel-color-bg);
+  color: var(--panel-color-text);
+  font-family: var(--panel-font-family);
+  font-size: var(--panel-font-size-md);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.panel-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

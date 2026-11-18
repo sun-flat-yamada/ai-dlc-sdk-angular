@@ -1,0 +1,6 @@
+{
+  "yaml.schemas": {
+    "./.ai-dlc/config/schemas/ui-bindings.schema.json": ".ai-dlc/inputs/ui-bindings/*.yaml"
+  },
+  "files.eol": "\n"
+}
