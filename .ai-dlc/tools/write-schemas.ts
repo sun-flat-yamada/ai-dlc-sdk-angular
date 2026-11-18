@@ -15,7 +15,8 @@ export function uiBindingsJsonSchema(): unknown {
   return {
     ...z.toJSONSchema(uiBindingsSchema, { io: 'input' }),
     title: 'AI-DLC ui-bindings.yaml',
-    description: 'Binds design HTML elements (data-ui-id) to REST API operations (OpenAPI operationId) and screen states.',
+    description:
+      'Binds design HTML elements (data-ui-id) to REST API operations (OpenAPI operationId) and screen states.',
   };
 }
 

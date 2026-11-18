@@ -163,7 +163,9 @@ export function findRepoRoot(start: string = process.cwd()): string {
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
-      throw new Error(`.ai-dlc/config not found above ${start}. Run the tools from the repository.`);
+      throw new Error(
+        `.ai-dlc/config not found above ${start}. Run the tools from the repository.`,
+      );
     }
     dir = parent;
   }
@@ -172,7 +174,9 @@ export function findRepoRoot(start: string = process.cwd()): string {
 export function parseConfig(text: string, source = 'aidlc.config.yaml'): AidlcConfig {
   const result = configSchema.safeParse(parse(text));
   if (!result.success) {
-    const issues = result.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new Error(`Invalid ${source}:\n${issues}`);
   }
   return result.data;

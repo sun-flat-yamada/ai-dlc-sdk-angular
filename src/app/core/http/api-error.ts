@@ -26,7 +26,10 @@ export class ApiError extends Error {
       return new ApiError('timeout', 0, 'The device did not respond in time.');
     }
     if (error instanceof HttpErrorResponse) {
-      const body = (error.error ?? {}) as { message?: string; fieldErrors?: Record<string, string> };
+      const body = (error.error ?? {}) as {
+        message?: string;
+        fieldErrors?: Record<string, string>;
+      };
       const message = body.message ?? error.message;
       if (error.status === 0) {
         return new ApiError('offline', 0, 'The device is not reachable.');

@@ -13,7 +13,12 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'front-panel', use: { ...devices['Desktop Chrome'], viewport: { width: 800, height: 480 }, hasTouch: true } }],
+  projects: [
+    {
+      name: 'front-panel',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 800, height: 480 }, hasTouch: true },
+    },
+  ],
   webServer: {
     command: `npx ng serve --port ${port}`,
     url: `http://localhost:${port}`,

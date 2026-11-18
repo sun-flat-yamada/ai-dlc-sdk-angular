@@ -7,7 +7,15 @@
  * adds the aidlc:* npm scripts and the harness devDependencies, and appends .gitignore rules.
  * Existing files are kept unless --force is given. Run `npm install` in the target afterwards.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { findRepoRoot } from './lib/config.js';
@@ -42,7 +50,11 @@ export interface InstallAction {
   detail: string;
 }
 
-function listFiles(dir: string, filter: (rel: string) => boolean = () => true, base = dir): string[] {
+function listFiles(
+  dir: string,
+  filter: (rel: string) => boolean = () => true,
+  base = dir,
+): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((name) => {
     const abs = path.join(dir, name);
@@ -52,11 +64,16 @@ function listFiles(dir: string, filter: (rel: string) => boolean = () => true, b
   });
 }
 
-export function planInstall(sourceRoot: string, targetRoot: string, options: { withSample: boolean; force: boolean }): InstallAction[] {
+export function planInstall(
+  sourceRoot: string,
+  targetRoot: string,
+  options: { withSample: boolean; force: boolean },
+): InstallAction[] {
   const actions: InstallAction[] = [];
   const copy = (srcRel: string) => {
     const dst = path.join(targetRoot, srcRel);
-    if (existsSync(dst) && !options.force) actions.push({ kind: 'skip', target: srcRel, detail: 'exists (use --force)' });
+    if (existsSync(dst) && !options.force)
+      actions.push({ kind: 'skip', target: srcRel, detail: 'exists (use --force)' });
     else actions.push({ kind: 'copy', target: srcRel, detail: '' });
   };
   const groups: [string, (rel: string) => boolean][] = [
@@ -70,28 +87,50 @@ export function planInstall(sourceRoot: string, targetRoot: string, options: { w
   for (const [dir, filter] of groups) {
     for (const rel of listFiles(path.join(sourceRoot, dir), filter)) copy(`${dir}/${rel}`);
   }
-  actions.push({ kind: 'package.json', target: 'package.json', detail: 'add aidlc:* scripts and missing harness devDependencies' });
+  actions.push({
+    kind: 'package.json',
+    target: 'package.json',
+    detail: 'add aidlc:* scripts and missing harness devDependencies',
+  });
   actions.push({ kind: '.gitignore', target: '.gitignore', detail: 'append AI-DLC output rules' });
-  actions.push({ kind: 'config', target: '.ai-dlc/config/aidlc.config.yaml', detail: 'set project name from angular.json' });
+  actions.push({
+    kind: 'config',
+    target: '.ai-dlc/config/aidlc.config.yaml',
+    detail: 'set project name from angular.json',
+  });
   return actions;
 }
 
-export function mergePackageJson(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+export function mergePackageJson(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
   const srcScripts = (source['scripts'] ?? {}) as Record<string, string>;
   const scripts = { ...((target['scripts'] ?? {}) as Record<string, string>) };
   for (const [k, v] of Object.entries(srcScripts)) {
-    if (k.startsWith('aidlc:') && k !== 'aidlc:install' && k !== 'aidlc:sample-excel' && !(k in scripts)) scripts[k] = v;
+    if (
+      k.startsWith('aidlc:') &&
+      k !== 'aidlc:install' &&
+      k !== 'aidlc:sample-excel' &&
+      !(k in scripts)
+    )
+      scripts[k] = v;
   }
   const devDependencies = { ...((target['devDependencies'] ?? {}) as Record<string, string>) };
   const deps = (target['dependencies'] ?? {}) as Record<string, string>;
   const srcDev = (source['devDependencies'] ?? {}) as Record<string, string>;
   for (const name of HARNESS_DEV_DEPENDENCIES) {
-    if (!(name in devDependencies) && !(name in deps) && srcDev[name]) devDependencies[name] = srcDev[name];
+    if (!(name in devDependencies) && !(name in deps) && srcDev[name])
+      devDependencies[name] = srcDev[name];
   }
   return { ...target, scripts, devDependencies };
 }
 
-export function runInstall(sourceRoot: string, targetRoot: string, options: { withSample: boolean; force: boolean; dryRun: boolean }): InstallAction[] {
+export function runInstall(
+  sourceRoot: string,
+  targetRoot: string,
+  options: { withSample: boolean; force: boolean; dryRun: boolean },
+): InstallAction[] {
   if (!existsSync(path.join(targetRoot, 'angular.json'))) {
     throw new Error(`${targetRoot} has no angular.json — the target must be an Angular workspace.`);
   }
@@ -104,19 +143,32 @@ export function runInstall(sourceRoot: string, targetRoot: string, options: { wi
       cpSync(path.join(sourceRoot, a.target), dst);
     }
   }
-  for (const dir of ['requirements', 'ui-design', 'api-specs', 'ui-bindings', 'subsystem-tests', 'human-baseline']) {
+  for (const dir of [
+    'requirements',
+    'ui-design',
+    'api-specs',
+    'ui-bindings',
+    'subsystem-tests',
+    'human-baseline',
+  ]) {
     mkdirSync(path.join(targetRoot, '.ai-dlc', 'inputs', dir), { recursive: true });
   }
   const pkgFile = path.join(targetRoot, 'package.json');
   const merged = mergePackageJson(
     JSON.parse(readFileSync(pkgFile, 'utf8')) as Record<string, unknown>,
-    JSON.parse(readFileSync(path.join(sourceRoot, 'package.json'), 'utf8')) as Record<string, unknown>,
+    JSON.parse(readFileSync(path.join(sourceRoot, 'package.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >,
   );
   writeFileSync(pkgFile, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
   const gitignore = path.join(targetRoot, '.gitignore');
   const current = existsSync(gitignore) ? readFileSync(gitignore, 'utf8') : '';
-  if (!current.includes('/.ai-dlc/outputs/**')) writeFileSync(gitignore, `${current.trimEnd()}\n${GITIGNORE_BLOCK}`, 'utf8');
-  const angular = JSON.parse(readFileSync(path.join(targetRoot, 'angular.json'), 'utf8')) as { projects?: Record<string, unknown> };
+  if (!current.includes('/.ai-dlc/outputs/**'))
+    writeFileSync(gitignore, `${current.trimEnd()}\n${GITIGNORE_BLOCK}`, 'utf8');
+  const angular = JSON.parse(readFileSync(path.join(targetRoot, 'angular.json'), 'utf8')) as {
+    projects?: Record<string, unknown>;
+  };
   const project = Object.keys(angular.projects ?? {})[0];
   const configFile = path.join(targetRoot, '.ai-dlc', 'config', 'aidlc.config.yaml');
   if (project && existsSync(configFile)) {
@@ -146,11 +198,16 @@ async function main(): Promise<number> {
     withSample: values['with-sample'],
     force: values.force,
   });
-  for (const a of actions) log.info(`${a.kind.padEnd(12)} ${a.target}${a.detail ? ` — ${a.detail}` : ''}`);
-  log.info(values['dry-run'] ? 'Dry-run: nothing written.' : 'Installed. Next steps in the target:');
+  for (const a of actions)
+    log.info(`${a.kind.padEnd(12)} ${a.target}${a.detail ? ` — ${a.detail}` : ''}`);
+  log.info(
+    values['dry-run'] ? 'Dry-run: nothing written.' : 'Installed. Next steps in the target:',
+  );
   if (!values['dry-run']) {
     log.info('  1. npm install && npx playwright install chromium');
-    log.info('  2. Edit .ai-dlc/config/boundary-policy.yaml and regenerate .ai-dlc/references/ for YOUR code base');
+    log.info(
+      '  2. Edit .ai-dlc/config/boundary-policy.yaml and regenerate .ai-dlc/references/ for YOUR code base',
+    );
     log.info('  3. Put the inputs into .ai-dlc/inputs/ and run npm run aidlc:validate-inputs');
     log.info('  4. npm run aidlc:init-check && npm run aidlc:run -- --max-iterations 3 --dry-run');
   }

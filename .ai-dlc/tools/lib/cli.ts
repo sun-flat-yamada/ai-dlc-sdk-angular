@@ -31,8 +31,9 @@ export function rel(root: string, file: string): string {
   return path.relative(root, file).split(path.sep).join('/');
 }
 
+/** Progress logging goes to stderr so that stdout stays machine-readable (`--json`). */
 export const log = {
-  info: (msg: string) => console.log(`[ai-dlc] ${msg}`),
-  warn: (msg: string) => console.warn(`[ai-dlc] WARN ${msg}`),
-  step: (msg: string) => console.log(`\n[ai-dlc] ── ${msg}`),
+  info: (msg: string) => console.error(`[ai-dlc] ${msg}`),
+  warn: (msg: string) => console.error(`[ai-dlc] WARN ${msg}`),
+  step: (msg: string) => console.error(`\n[ai-dlc] ── ${msg}`),
 };

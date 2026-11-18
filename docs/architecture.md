@@ -49,6 +49,12 @@ flowchart TB
 `skipped` never counts as `pass`. In dry-run mode gates 2-4 are skipped, so the loop runs exactly N times and
 ends as `exhausted` — that exercises the bound and the reports. `--simulate-pass-at k` exercises the early exit.
 
+## Boundary revert
+
+A violating file is restored to its baseline content **as a whole** (a new file in a protected zone is
+deleted). In an `extensible` file this also drops the allowed additions made in the same file; the
+violation is reported to the next iteration, which re-applies the change as a pure addition.
+
 ## Final gate integrity
 
 Gate 4 passes only when:

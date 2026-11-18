@@ -14,7 +14,13 @@ import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { AidlcConfig, AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
-import { CopilotCallRecord, GateResult, RunRecord, readRunHistory, writeJsonAtomic } from './lib/telemetry.js';
+import {
+  CopilotCallRecord,
+  GateResult,
+  RunRecord,
+  readRunHistory,
+  writeJsonAtomic,
+} from './lib/telemetry.js';
 
 export const humanBaselineSchema = z.object({
   project: z.string(),
@@ -24,7 +30,11 @@ export const humanBaselineSchema = z.object({
     subsystemTestFirstPassRate: z.number().min(0).max(1).optional(),
     subsystemTestFinalPassRate: z.number().min(0).max(1).optional(),
     unitTestCoverage: z
-      .object({ statements: z.number().optional(), branches: z.number().optional(), lines: z.number().optional() })
+      .object({
+        statements: z.number().optional(),
+        branches: z.number().optional(),
+        lines: z.number().optional(),
+      })
       .optional(),
     staticAnalysisWarnings: z.number().int().nonnegative().optional(),
     defectsFound: z.number().int().nonnegative().optional(),
@@ -88,18 +98,31 @@ export interface QcdResult {
       humanCost: number;
       totalCost: number;
     };
-    human: { effortHours: number; hourlyRate: number; totalCost: number; breakdown: Record<string, number> };
+    human: {
+      effortHours: number;
+      hourlyRate: number;
+      totalCost: number;
+      breakdown: Record<string, number>;
+    };
     reductionRate: Num;
   };
   delivery: {
-    ai: { leadTimeHours: number; iterations: number; maxIterations: number; result: RunRecord['result'] };
+    ai: {
+      leadTimeHours: number;
+      iterations: number;
+      maxIterations: number;
+      result: RunRecord['result'];
+    };
     human: { leadTimeHours: number; calendarDays: Num };
     reductionRate: Num;
   };
 }
 
 const lastWith = (gates: GateResult[][], gate: GateResult['gate']) =>
-  [...gates].reverse().flat().find((g) => g.gate === gate && g.status !== 'skipped');
+  [...gates]
+    .reverse()
+    .flat()
+    .find((g) => g.gate === gate && g.status !== 'skipped');
 const firstWith = (gates: GateResult[][], gate: GateResult['gate']) =>
   gates.flat().find((g) => g.gate === gate && g.status !== 'skipped');
 const metric = (g: GateResult | undefined, key: string): Num => (g?.metrics?.[key] ?? null) as Num;
@@ -120,16 +143,25 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
     .reduce((sum, [, s]) => sum + s.added, 0);
   const changedKloc = changedLines > 0 ? changedLines / 1000 : null;
 
-  const calls: CopilotCallRecord[] = [...run.iterations.flatMap((i) => i.copilotCalls), ...run.postProcess];
+  const calls: CopilotCallRecord[] = [
+    ...run.iterations.flatMap((i) => i.copilotCalls),
+    ...run.postProcess,
+  ];
   const realCalls = calls.filter((c) => !c.dryRun);
   const withUsage = realCalls.filter((c) => c.usage);
   const sum = (f: (c: CopilotCallRecord) => number) => calls.reduce((s, c) => s + f(c), 0);
-  const aiCredits = withUsage.length ? withUsage.reduce((s, c) => s + (c.usage?.aiCredits ?? 0), 0) : null;
-  const premiumRequests = withUsage.length ? withUsage.reduce((s, c) => s + (c.usage?.premiumRequests ?? 0), 0) : null;
+  const aiCredits = withUsage.length
+    ? withUsage.reduce((s, c) => s + (c.usage?.aiCredits ?? 0), 0)
+    : null;
+  const premiumRequests = withUsage.length
+    ? withUsage.reduce((s, c) => s + (c.usage?.premiumRequests ?? 0), 0)
+    : null;
   const tokensAreEstimated = withUsage.length !== calls.length;
   const inputTokens = sum((c) => c.usage?.inputTokens ?? c.estimatedInputTokens);
   const outputTokens = sum((c) => c.usage?.outputTokens ?? c.estimatedOutputTokens);
-  const aiCost = (aiCredits ?? 0) * config.qcd.aiCreditUnitCost + (premiumRequests ?? 0) * config.qcd.premiumRequestUnitCost;
+  const aiCost =
+    (aiCredits ?? 0) * config.qcd.aiCreditUnitCost +
+    (premiumRequests ?? 0) * config.qcd.premiumRequestUnitCost;
   const hourlyRate = human.cost.hourlyRate ?? config.qcd.humanHourlyRate;
   const aiHumanHours = Object.values(config.qcd.aiDlcHumanHours).reduce((a, b) => a + b, 0);
   const aiHumanCost = aiHumanHours * config.qcd.humanHourlyRate;
@@ -151,7 +183,12 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
       ai: {
         subsystemFirstPassRate: metric(firstSub, 'passRate'),
         subsystemFinalPassRate: metric(lastSub, 'passRate'),
-        passRateByIteration: gates.map((g) => metric(g.find((x) => x.gate === 'subsystem' && x.status !== 'skipped'), 'passRate')),
+        passRateByIteration: gates.map((g) =>
+          metric(
+            g.find((x) => x.gate === 'subsystem' && x.status !== 'skipped'),
+            'passRate',
+          ),
+        ),
         coverageStatements: metric(lastUnit, 'coverageStatements'),
         coverageBranches: metric(lastUnit, 'coverageBranches'),
         coverageLines: metric(lastUnit, 'coverageLines'),
@@ -185,7 +222,12 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
         humanCost: round(aiHumanCost),
         totalCost: round(aiTotal),
       },
-      human: { effortHours: humanHours, hourlyRate, totalCost: round(humanCost), breakdown: human.cost.effortHours },
+      human: {
+        effortHours: humanHours,
+        hourlyRate,
+        totalCost: round(humanCost),
+        breakdown: human.cost.effortHours,
+      },
       reductionRate: comparable ? rate(aiTotal, humanCost) : null,
     },
     delivery: {
@@ -195,7 +237,10 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
         maxIterations: run.maxIterations,
         result: run.result,
       },
-      human: { leadTimeHours: human.delivery.leadTimeHours, calendarDays: human.delivery.calendarDays ?? null },
+      human: {
+        leadTimeHours: human.delivery.leadTimeHours,
+        calendarDays: human.delivery.calendarDays ?? null,
+      },
       reductionRate: comparable ? rate(leadTimeHours, human.delivery.leadTimeHours) : null,
     },
   };
@@ -246,7 +291,8 @@ const L = {
   en: {
     title: 'QCD comparison report (AI-DLC vs human development)',
     dry: '> ⚠ Dry-run result. Copilot CLI was not called; the numbers only validate the harness.',
-    notComparable: '> ⚠ The final quality gate was not passed, so reductions are not calculated (N/A).',
+    notComparable:
+      '> ⚠ The final quality gate was not passed, so reductions are not calculated (N/A).',
     item: 'Metric',
     ai: 'AI-DLC',
     human: 'Human',
@@ -287,16 +333,23 @@ const L = {
 } as const;
 
 const pct = (n: Num) => (n === null ? 'N/A' : `${(n * 100).toFixed(1)}%`);
-const num = (n: Num, d = 2) => (n === null ? 'N/A' : n.toLocaleString('en-US', { maximumFractionDigits: d }));
+const num = (n: Num, d = 2) =>
+  n === null ? 'N/A' : n.toLocaleString('en-US', { maximumFractionDigits: d });
 const covPct = (n: Num) => (n === null ? 'N/A' : `${n.toFixed(1)}%`);
 
 export function renderQcdMarkdown(r: QcdResult, language: 'ja' | 'en'): string {
   const t = L[language];
-  const money = (n: number) => `${r.currency} ${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  const money = (n: number) =>
+    `${r.currency} ${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   const humanCovLines = r.quality.human.coverageLines;
   const rows = (items: [string, string, string, string][]) =>
-    [`| ${t.item} | ${t.ai} | ${t.human} | ${t.diff} |`, '| --- | ---: | ---: | ---: |', ...items.map((i) => `| ${i.join(' | ')} |`)].join('\n');
-  const diffPct = (a: Num, h: Num) => (a === null || h === null ? '—' : `${((a - h) * 100).toFixed(1)} pt`);
+    [
+      `| ${t.item} | ${t.ai} | ${t.human} | ${t.diff} |`,
+      '| --- | ---: | ---: | ---: |',
+      ...items.map((i) => `| ${i.join(' | ')} |`),
+    ].join('\n');
+  const diffPct = (a: Num, h: Num) =>
+    a === null || h === null ? '—' : `${((a - h) * 100).toFixed(1)} pt`;
   const out = [
     `# ${t.title}`,
     '',
@@ -307,13 +360,35 @@ export function renderQcdMarkdown(r: QcdResult, language: 'ja' | 'en'): string {
     `## ${t.q}`,
     '',
     rows([
-      [t.firstPass, pct(r.quality.ai.subsystemFirstPassRate), pct(r.quality.human.subsystemFirstPassRate), diffPct(r.quality.ai.subsystemFirstPassRate, r.quality.human.subsystemFirstPassRate)],
-      [t.finalPass, pct(r.quality.ai.subsystemFinalPassRate), pct(r.quality.human.subsystemFinalPassRate), diffPct(r.quality.ai.subsystemFinalPassRate, r.quality.human.subsystemFinalPassRate)],
-      [t.covLines, covPct(r.quality.ai.coverageLines), covPct(humanCovLines), r.quality.ai.coverageLines !== null && humanCovLines !== null ? `${(r.quality.ai.coverageLines - humanCovLines).toFixed(1)} pt` : '—'],
+      [
+        t.firstPass,
+        pct(r.quality.ai.subsystemFirstPassRate),
+        pct(r.quality.human.subsystemFirstPassRate),
+        diffPct(r.quality.ai.subsystemFirstPassRate, r.quality.human.subsystemFirstPassRate),
+      ],
+      [
+        t.finalPass,
+        pct(r.quality.ai.subsystemFinalPassRate),
+        pct(r.quality.human.subsystemFinalPassRate),
+        diffPct(r.quality.ai.subsystemFinalPassRate, r.quality.human.subsystemFinalPassRate),
+      ],
+      [
+        t.covLines,
+        covPct(r.quality.ai.coverageLines),
+        covPct(humanCovLines),
+        r.quality.ai.coverageLines !== null && humanCovLines !== null
+          ? `${(r.quality.ai.coverageLines - humanCovLines).toFixed(1)} pt`
+          : '—',
+      ],
       [t.covStmts, covPct(r.quality.ai.coverageStatements), 'N/A', '—'],
       [t.lint, num(r.quality.ai.lintWarnings, 0), num(r.quality.human.lintWarnings, 0), '—'],
       [t.defects, num(r.quality.ai.defectsDetected, 0), num(r.quality.human.defectsFound, 0), '—'],
-      [t.density, num(r.quality.ai.defectDensityPerKloc), num(r.quality.human.defectDensityPerKloc), '—'],
+      [
+        t.density,
+        num(r.quality.ai.defectDensityPerKloc),
+        num(r.quality.human.defectDensityPerKloc),
+        '—',
+      ],
     ]),
     '',
     `${t.trend}: ${r.quality.ai.passRateByIteration.map((p, i) => `#${i + 1} ${pct(p)}`).join(' → ') || 'N/A'}`,
@@ -323,19 +398,36 @@ export function renderQcdMarkdown(r: QcdResult, language: 'ja' | 'en'): string {
     rows([
       [t.calls, num(r.cost.ai.copilotCalls, 0), '—', '—'],
       [t.credits, `${num(r.cost.ai.aiCredits)} / ${num(r.cost.ai.premiumRequests)}`, '—', '—'],
-      [t.tokens, `${num(r.cost.ai.inputTokens, 0)} / ${num(r.cost.ai.outputTokens, 0)}${r.cost.ai.tokensAreEstimated ? ` (${t.estimated})` : ''}`, '—', '—'],
+      [
+        t.tokens,
+        `${num(r.cost.ai.inputTokens, 0)} / ${num(r.cost.ai.outputTokens, 0)}${r.cost.ai.tokensAreEstimated ? ` (${t.estimated})` : ''}`,
+        '—',
+        '—',
+      ],
       [t.aiCost, money(r.cost.ai.aiCost), '—', '—'],
       [t.humanHours, num(r.cost.ai.humanHours), num(r.cost.human.effortHours), '—'],
       [t.humanCost, money(r.cost.ai.humanCost), money(r.cost.human.totalCost), '—'],
-      [`**${t.total}**`, `**${money(r.cost.ai.totalCost)}**`, `**${money(r.cost.human.totalCost)}**`, `**${pct(r.cost.reductionRate)}**`],
+      [
+        `**${t.total}**`,
+        `**${money(r.cost.ai.totalCost)}**`,
+        `**${money(r.cost.human.totalCost)}**`,
+        `**${pct(r.cost.reductionRate)}**`,
+      ],
     ]),
     '',
-    `${t.breakdown}: ${Object.entries(r.cost.human.breakdown).map(([k, v]) => `${k} ${v}h`).join(', ')}`,
+    `${t.breakdown}: ${Object.entries(r.cost.human.breakdown)
+      .map(([k, v]) => `${k} ${v}h`)
+      .join(', ')}`,
     '',
     `## ${t.d}`,
     '',
     rows([
-      [`**${t.lead}**`, `**${num(r.delivery.ai.leadTimeHours, 3)}**`, `**${num(r.delivery.human.leadTimeHours)}**`, `**${pct(r.delivery.reductionRate)}**`],
+      [
+        `**${t.lead}**`,
+        `**${num(r.delivery.ai.leadTimeHours, 3)}**`,
+        `**${num(r.delivery.human.leadTimeHours)}**`,
+        `**${pct(r.delivery.reductionRate)}**`,
+      ],
       [t.loops, `${r.delivery.ai.iterations} / ${r.delivery.ai.maxIterations}`, '—', '—'],
       [t.days, '—', num(r.delivery.human.calendarDays, 1), '—'],
       [t.result, r.delivery.ai.result, '—', '—'],
@@ -354,14 +446,24 @@ export function selectRun(runs: RunRecord[], runId?: string): RunRecord | undefi
   return [...runs].reverse().find((r) => r.mode === 'full-loop');
 }
 
-export function writeQcdReport(paths: AidlcPaths, config: AidlcConfig, runId?: string): { md: string; json: string; result: QcdResult } {
+export function writeQcdReport(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  runId?: string,
+): { md: string; json: string; result: QcdResult } {
   const run = selectRun(readRunHistory(paths.runHistory).runs, runId);
-  if (!run) throw new Error(`No full-loop run in ${rel(paths.root, paths.runHistory)}${runId ? ` with id ${runId}` : ''}. Run \`npm run aidlc:run\` first.`);
+  if (!run)
+    throw new Error(
+      `No full-loop run in ${rel(paths.root, paths.runHistory)}${runId ? ` with id ${runId}` : ''}. Run \`npm run aidlc:run\` first.`,
+    );
   const baselineFile = path.join(paths.inputs.humanBaseline, 'human-qcd.json');
-  if (!existsSync(baselineFile)) throw new Error(`Human baseline not found: ${rel(paths.root, baselineFile)}`);
+  if (!existsSync(baselineFile))
+    throw new Error(`Human baseline not found: ${rel(paths.root, baselineFile)}`);
   const parsed = humanBaselineSchema.safeParse(JSON.parse(readFileSync(baselineFile, 'utf8')));
   if (!parsed.success) {
-    throw new Error(`Invalid human-qcd.json:\n${parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n')}`);
+    throw new Error(
+      `Invalid human-qcd.json:\n${parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n')}`,
+    );
   }
   const result = calculateQcd(run, parsed.data, config);
   mkdirSync(paths.outputs.reports, { recursive: true });
@@ -379,7 +481,9 @@ async function main(): Promise<number> {
   const config = loadConfig(paths.config);
   const { md, result } = writeQcdReport(paths, config, values['run-id']);
   log.info(`QCD report: ${rel(root, md)}`);
-  log.info(`Cost reduction ${pct(result.cost.reductionRate)}, lead time reduction ${pct(result.delivery.reductionRate)}`);
+  log.info(
+    `Cost reduction ${pct(result.cost.reductionRate)}, lead time reduction ${pct(result.delivery.reductionRate)}`,
+  );
   return 0;
 }
 

@@ -23,7 +23,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'front-panel', use: { ...devices['Desktop Chrome'], viewport: { width: 800, height: 480 }, hasTouch: true } }],
+  projects: [
+    {
+      name: 'front-panel',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 800, height: 480 }, hasTouch: true },
+    },
+  ],
   webServer: {
     command: `npx ng serve --port ${port}`,
     cwd: '../..',

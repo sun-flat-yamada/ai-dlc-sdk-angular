@@ -31,7 +31,9 @@ export type BoundaryPolicy = z.infer<typeof boundaryPolicySchema>;
 export function parseBoundaryPolicy(text: string, source = 'boundary-policy.yaml'): BoundaryPolicy {
   const result = boundaryPolicySchema.safeParse(parse(text));
   if (!result.success) {
-    const issues = result.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new Error(`Invalid ${source}:\n${issues}`);
   }
   return result.data;
@@ -94,7 +96,8 @@ export interface BoundaryReport {
 }
 
 const MESSAGES: Record<ViolationRule, string> = {
-  'immutable-changed': 'Immutable zone: reuse it (import), never edit, add, rename or delete files here.',
+  'immutable-changed':
+    'Immutable zone: reuse it (import), never edit, add, rename or delete files here.',
   'extensible-lines-removed':
     'Extensible zone is append-only: existing lines were changed or removed. Only add new entries.',
   'extensible-file-removed': 'Extensible zone: existing files must not be deleted or renamed.',
@@ -149,8 +152,10 @@ function ruleFor(
     case 'ignored':
       return 'out-of-scope';
     case 'extensible':
-      if (change.status === 'deleted' || change.status === 'renamed') return 'extensible-file-removed';
-      if (change.status === 'modified' && (change.deleted ?? 0) > 0) return 'extensible-lines-removed';
+      if (change.status === 'deleted' || change.status === 'renamed')
+        return 'extensible-file-removed';
+      if (change.status === 'modified' && (change.deleted ?? 0) > 0)
+        return 'extensible-lines-removed';
       return undefined;
     case 'unclassified':
       return unclassified === 'deny' ? 'unclassified' : undefined;

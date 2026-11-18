@@ -41,7 +41,14 @@ export interface ReverseDocFacts {
   uiDesignFiles: string[];
   apiSpecFiles: string[];
   requirementFiles: string[];
-  subsystemCases: { id: string; category: string; title: string; requirements: string[]; uiRefs: string[]; expectedApi: string[] }[];
+  subsystemCases: {
+    id: string;
+    category: string;
+    title: string;
+    requirements: string[];
+    uiRefs: string[];
+    expectedApi: string[];
+  }[];
 }
 
 function walkTs(dir: string): string[] {
@@ -57,22 +64,32 @@ function walkTs(dir: string): string[] {
 
 const unique = <T>(xs: T[]) => [...new Set(xs)];
 
-export function extractComponent(source: string): Pick<ComponentFact, 'className' | 'selector' | 'usesServices' | 'testIds'> | undefined {
+export function extractComponent(
+  source: string,
+): Pick<ComponentFact, 'className' | 'selector' | 'usesServices' | 'testIds'> | undefined {
   if (!/@Component\s*\(/.test(source)) return undefined;
   const className = /export\s+class\s+(\w+)/.exec(source)?.[1] ?? '';
   const selector = /selector:\s*['"]([^'"]+)['"]/.exec(source)?.[1] ?? '';
-  const usesServices = unique([...source.matchAll(/inject\(\s*(\w+)\s*\)/g)].map((m) => m[1]!)).filter(
+  const usesServices = unique(
+    [...source.matchAll(/inject\(\s*(\w+)\s*\)/g)].map((m) => m[1]!),
+  ).filter(
     (s) => !['Router', 'DestroyRef', 'ActivatedRoute', 'ElementRef', 'Injector'].includes(s),
   );
-  const testIds = unique([...source.matchAll(/data-testid="([^"]+)"|testId="([^"]+)"/g)].map((m) => (m[1] ?? m[2])!));
+  const testIds = unique(
+    [...source.matchAll(/data-testid="([^"]+)"|testId="([^"]+)"/g)].map((m) => (m[1] ?? m[2])!),
+  );
   return { className, selector, usesServices, testIds };
 }
 
-export function extractService(source: string): Pick<ServiceFact, 'className' | 'apiCalls'> | undefined {
+export function extractService(
+  source: string,
+): Pick<ServiceFact, 'className' | 'apiCalls'> | undefined {
   if (!/@Injectable\s*\(/.test(source)) return undefined;
   const className = /export\s+class\s+(\w+)/.exec(source)?.[1] ?? '';
   const found = [
-    ...source.matchAll(/\b(?:api|client|http)\.(get|put|post|patch|delete)\s*(?:<[^(]*>)?\(\s*[`'"]([^`'"]+)[`'"]/g),
+    ...source.matchAll(
+      /\b(?:api|client|http)\.(get|put|post|patch|delete)\s*(?:<[^(]*>)?\(\s*[`'"]([^`'"]+)[`'"]/g,
+    ),
   ].map((m) => ({ method: m[1]!.toUpperCase(), path: m[2]! }));
   const seen = new Set<string>();
   const calls = found.filter((c) => {
@@ -86,7 +103,8 @@ export function extractService(source: string): Pick<ServiceFact, 'className' | 
 
 export function extractRoutes(source: string): RouteFact[] {
   const routes: RouteFact[] = [];
-  const re = /path:\s*['"]([^'"]*)['"][^}]*?(?:import\(\s*['"]([^'"]+)['"]\)|component:\s*(\w+)|redirectTo:\s*['"]([^'"]*)['"])/gs;
+  const re =
+    /path:\s*['"]([^'"]*)['"][^}]*?(?:import\(\s*['"]([^'"]+)['"]\)|component:\s*(\w+)|redirectTo:\s*['"]([^'"]*)['"])/gs;
   for (const m of source.matchAll(re)) {
     routes.push({ path: `/${m[1]}`, target: m[2] ?? m[3] ?? `redirect → /${m[4] ?? ''}` });
   }
@@ -138,7 +156,11 @@ export function collectFacts(
       id: c.id,
       category: c.category,
       title: c.title,
-      requirements: [...new Set([...`${c.notes} ${c.title}`.matchAll(/\bREQ-[A-Z0-9][A-Z0-9-]*/g)].map((m) => m[0]))],
+      requirements: [
+        ...new Set(
+          [...`${c.notes} ${c.title}`.matchAll(/\bREQ-[A-Z0-9][A-Z0-9-]*/g)].map((m) => m[0]),
+        ),
+      ],
       uiRefs: c.uiRefs ?? [],
       expectedApi: c.expectedApi.map((a) => `${a.method} ${a.path}`),
     })),

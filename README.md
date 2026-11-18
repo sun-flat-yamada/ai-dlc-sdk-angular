@@ -125,8 +125,11 @@ docs/            architecture, input format, adoption guide
 
 ## Status
 
-`0.1.0` — the harness, skills, input validation and dry-run pipeline are tested in CI. Real Copilot CLI runs
-depend on your Copilot plan and environment; please report results and issues.
+`0.1.0` — the harness, skills, input validation and dry-run pipeline are tested in CI. Gates 0-4 were also
+verified end to end against a reference implementation of the sample screen (not committed, because the
+sample code base must stay in its "before" state): build, lint, 37 unit tests at 99 % line coverage and 8/8
+Excel-derived Playwright cases passed, and wrong texts, skipped tests and append-only violations were
+rejected. Real Copilot CLI runs depend on your Copilot plan and environment; please report results and issues.
 
 ## License
 

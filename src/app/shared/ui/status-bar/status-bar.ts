@@ -22,7 +22,9 @@ const STATE_LABELS: Record<string, string> = {
         >{{ stateLabel() }}</span
       >
       @if (status().alerts.length > 0) {
-        <span class="status-bar__alerts" data-ui-id="alert-count">⚠ {{ status().alerts.length }}</span>
+        <span class="status-bar__alerts" data-ui-id="alert-count"
+          >⚠ {{ status().alerts.length }}</span
+        >
       }
     </header>
   `,
@@ -56,5 +58,7 @@ const STATE_LABELS: Record<string, string> = {
 })
 export class StatusBar {
   protected readonly status = inject(PanelStatusService).status;
-  protected readonly stateLabel = computed(() => STATE_LABELS[this.status().state] ?? this.status().state);
+  protected readonly stateLabel = computed(
+    () => STATE_LABELS[this.status().state] ?? this.status().state,
+  );
 }

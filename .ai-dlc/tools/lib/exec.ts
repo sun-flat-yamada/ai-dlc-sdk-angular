@@ -60,7 +60,13 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
         : undefined;
     const finish = (exitCode: number) => {
       if (timer) clearTimeout(timer);
-      resolve({ command: [...command], exitCode, output, durationMs: Date.now() - started, timedOut });
+      resolve({
+        command: [...command],
+        exitCode,
+        output,
+        durationMs: Date.now() - started,
+        timedOut,
+      });
     };
     child.on('error', (error) => {
       output += `\n[exec] ${error.message}\n`;

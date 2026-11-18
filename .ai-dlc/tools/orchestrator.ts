@@ -28,10 +28,23 @@ import { AidlcConfig, AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from 
 import { exec } from './lib/exec.js';
 import { Git } from './lib/git.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
-import { SKILLS, buildFixPrompt, buildImplementPrompt, buildQcdPrompt, buildReverseDocPrompt } from './lib/prompts.js';
+import {
+  SKILLS,
+  buildFixPrompt,
+  buildImplementPrompt,
+  buildQcdPrompt,
+  buildReverseDocPrompt,
+} from './lib/prompts.js';
 import { collectFacts } from './lib/reverse-doc-facts.js';
 import { renderReverseDocs } from './lib/reverse-doc-render.js';
-import { GateResult, IterationRecord, RunRecord, newRunId, upsertRun, writeJsonAtomic } from './lib/telemetry.js';
+import {
+  GateResult,
+  IterationRecord,
+  RunRecord,
+  newRunId,
+  upsertRun,
+  writeJsonAtomic,
+} from './lib/telemetry.js';
 
 export type Mode = 'validate-env' | 'full-loop' | 'reverse-doc';
 
@@ -53,11 +66,20 @@ interface Check {
   required: boolean;
 }
 
-export async function validateEnvironment(paths: AidlcPaths, config: AidlcConfig, dryRun: boolean): Promise<Check[]> {
+export async function validateEnvironment(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  dryRun: boolean,
+): Promise<Check[]> {
   const checks: Check[] = [];
-  const add = (name: string, ok: boolean, detail: string, required = true) => checks.push({ name, ok, detail, required });
+  const add = (name: string, ok: boolean, detail: string, required = true) =>
+    checks.push({ name, ok, detail, required });
   const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
-  add('Node.js', major >= 26 || (major === 24 && minor >= 15) || (major === 22 && minor >= 22), process.versions.node);
+  add(
+    'Node.js',
+    major >= 26 || (major === 24 && minor >= 15) || (major === 22 && minor >= 22),
+    process.versions.node,
+  );
   const git = new Git(paths.root);
   const isRepo = await git.isRepository();
   add('Git repository', isRepo, paths.root);
@@ -67,7 +89,11 @@ export async function validateEnvironment(paths: AidlcPaths, config: AidlcConfig
   } catch {
     head = '';
   }
-  add('Git baseline commit', head !== '', head ? head.slice(0, 12) : 'no commit yet — commit the repository first');
+  add(
+    'Git baseline commit',
+    head !== '',
+    head ? head.slice(0, 12) : 'no commit yet — commit the repository first',
+  );
   try {
     loadBoundaryPolicy(paths.boundaryPolicy);
     add('boundary-policy.yaml', true, rel(paths.root, paths.boundaryPolicy));
@@ -79,16 +105,50 @@ export async function validateEnvironment(paths: AidlcPaths, config: AidlcConfig
     add(`Skill ${skill}`, existsSync(file), rel(paths.root, file));
   }
   const workbooks = findWorkbooks(paths.inputs.subsystemTests);
-  add('Subsystem test workbooks', workbooks.length > 0, workbooks.map((w) => rel(paths.root, w)).join(', ') || 'no *.xlsx in inputs/subsystem-tests');
-  add('Human baseline', existsSync(path.join(paths.inputs.humanBaseline, 'human-qcd.json')), 'inputs/human-baseline/human-qcd.json', false);
-  for (const [name, dir] of Object.entries({ requirements: paths.inputs.requirements, 'ui-design': paths.inputs.uiDesign, 'api-specs': paths.inputs.apiSpecs, 'ui-bindings': paths.inputs.uiBindings })) {
+  add(
+    'Subsystem test workbooks',
+    workbooks.length > 0,
+    workbooks.map((w) => rel(paths.root, w)).join(', ') || 'no *.xlsx in inputs/subsystem-tests',
+  );
+  add(
+    'Human baseline',
+    existsSync(path.join(paths.inputs.humanBaseline, 'human-qcd.json')),
+    'inputs/human-baseline/human-qcd.json',
+    false,
+  );
+  for (const [name, dir] of Object.entries({
+    requirements: paths.inputs.requirements,
+    'ui-design': paths.inputs.uiDesign,
+    'api-specs': paths.inputs.apiSpecs,
+    'ui-bindings': paths.inputs.uiBindings,
+  })) {
     add(`Inputs: ${name}`, existsSync(dir), rel(paths.root, dir));
   }
   const copilot = await probeCopilot(paths, config);
-  add('GitHub Copilot CLI', copilot.ok, copilot.ok ? copilot.version : `"${config.copilot.command}" not found — npm install -g @github/copilot`, !dryRun);
-  const ng = await exec(['npx', '--no-install', 'ng', 'version'], { cwd: paths.root, timeoutMs: 120_000 });
-  add('Angular CLI', ng.exitCode === 0, ng.exitCode === 0 ? (/Angular CLI\s*:\s*(\S+)/.exec(ng.output)?.[1] ?? 'installed') : 'run npm install', !dryRun);
-  const pw = await exec(['npx', '--no-install', 'playwright', '--version'], { cwd: paths.root, timeoutMs: 120_000 });
+  add(
+    'GitHub Copilot CLI',
+    copilot.ok,
+    copilot.ok
+      ? copilot.version
+      : `"${config.copilot.command}" not found — npm install -g @github/copilot`,
+    !dryRun,
+  );
+  const ng = await exec(['npx', '--no-install', 'ng', 'version'], {
+    cwd: paths.root,
+    timeoutMs: 120_000,
+  });
+  add(
+    'Angular CLI',
+    ng.exitCode === 0,
+    ng.exitCode === 0
+      ? (/Angular CLI\s*:\s*(\S+)/.exec(ng.output)?.[1] ?? 'installed')
+      : 'run npm install',
+    !dryRun,
+  );
+  const pw = await exec(['npx', '--no-install', 'playwright', '--version'], {
+    cwd: paths.root,
+    timeoutMs: 120_000,
+  });
   add('Playwright', pw.exitCode === 0, pw.output.trim().split(/\r?\n/)[0] ?? '', !dryRun);
   return checks;
 }
@@ -102,7 +162,9 @@ function printChecks(checks: Check[]): boolean {
 }
 
 function simulatedPass(gates: GateResult[]): GateResult[] {
-  return gates.map((g) => (g.status === 'skipped' ? { ...g, status: 'pass', summary: 'Simulated pass (dry-run)' } : g));
+  return gates.map((g) =>
+    g.status === 'skipped' ? { ...g, status: 'pass', summary: 'Simulated pass (dry-run)' } : g,
+  );
 }
 
 function renderFailures(iteration: IterationRecord): string {
@@ -151,27 +213,43 @@ function renderUnresolved(run: RunRecord): string {
   for (const g of last?.gates ?? []) {
     if (g.status === 'pass') continue;
     lines.push(`## ${g.gate}: ${g.status.toUpperCase()} — ${g.summary}`, '');
-    for (const f of g.failures) lines.push(`- [ ] \`${f.where}\` — ${f.message.replace(/\n/g, ' ')}`);
+    for (const f of g.failures)
+      lines.push(`- [ ] \`${f.where}\` — ${f.message.replace(/\n/g, ' ')}`);
     lines.push('');
   }
   return lines.join('\n');
 }
 
-async function postProcess(paths: AidlcPaths, config: AidlcConfig, run: RunRecord, workDir: string, dryRun: boolean): Promise<void> {
+async function postProcess(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  run: RunRecord,
+  workDir: string,
+  dryRun: boolean,
+): Promise<void> {
   const git = new Git(paths.root);
   const policy = loadBoundaryPolicy(paths.boundaryPolicy);
   const changes = run.baseline ? await git.changesSince(run.baseline) : [];
   const facts = collectFacts(paths, policy, run.baseline, changes);
   const factsFile = path.join(paths.outputs.reverseDocs, 'reverse-doc-facts.json');
   writeJsonAtomic(factsFile, facts);
-  const gateStatus = run.mode === 'reverse-doc' ? 'n/a (reverse-doc mode)' : `${run.result} (${run.iterations.length}/${run.maxIterations} iterations)`;
+  const gateStatus =
+    run.mode === 'reverse-doc'
+      ? 'n/a (reverse-doc mode)'
+      : `${run.result} (${run.iterations.length}/${run.maxIterations} iterations)`;
   const input = validateInputs(paths);
   const bindingMatrix = input.bindings
     ? renderBindingMatrix(input.bindings, input.operations).replace(/^# .*\n/, '')
     : '_(ui-bindings.yaml not available)_';
-  const docs = renderReverseDocs(path.join(paths.skills, SKILLS.reverseDoc, 'templates'), paths.outputs.reverseDocs, facts, gateStatus, {
-    bindingMatrix,
-  });
+  const docs = renderReverseDocs(
+    path.join(paths.skills, SKILLS.reverseDoc, 'templates'),
+    paths.outputs.reverseDocs,
+    facts,
+    gateStatus,
+    {
+      bindingMatrix,
+    },
+  );
   log.info(`Reverse docs (facts pre-filled): ${docs.map((d) => rel(paths.root, d)).join(', ')}`);
   run.postProcess.push(
     await callCopilot(paths, config, {
@@ -206,18 +284,32 @@ async function postProcess(paths: AidlcPaths, config: AidlcConfig, run: RunRecor
   );
 }
 
-export async function runFullLoop(paths: AidlcPaths, config: AidlcConfig, options: OrchestratorOptions): Promise<RunRecord> {
+export async function runFullLoop(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  options: OrchestratorOptions,
+): Promise<RunRecord> {
   const maxIterations = options.maxIterations ?? config.loop.maxIterations;
   const git = new Git(paths.root);
-  if (!(await git.isRepository())) throw new Error('Not a git repository: the boundary guard needs git.');
+  if (!(await git.isRepository()))
+    throw new Error('Not a git repository: the boundary guard needs git.');
   try {
     await git.head();
   } catch {
-    throw new Error('The repository has no commit yet. Commit it first: the boundary guard compares against HEAD.');
+    throw new Error(
+      'The repository has no commit yet. Commit it first: the boundary guard compares against HEAD.',
+    );
   }
   const dirty = await git.statusLines();
-  if (dirty.length && config.loop.requireCleanWorkingTree && !options.allowDirty && !options.dryRun) {
-    throw new Error(`Working tree has ${dirty.length} uncommitted change(s). Commit or stash them, or pass --allow-dirty.`);
+  if (
+    dirty.length &&
+    config.loop.requireCleanWorkingTree &&
+    !options.allowDirty &&
+    !options.dryRun
+  ) {
+    throw new Error(
+      `Working tree has ${dirty.length} uncommitted change(s). Commit or stash them, or pass --allow-dirty.`,
+    );
   }
   const policy = loadBoundaryPolicy(paths.boundaryPolicy);
   const runId = newRunId();
@@ -231,10 +323,14 @@ export async function runFullLoop(paths: AidlcPaths, config: AidlcConfig, option
   for (const f of inputs.failures) log.warn(`${f.where}: ${f.message}`);
   log.info(`Gate 0 (inputs): ${inputs.summary}`);
   if (inputs.status === 'fail') {
-    throw new Error('Inputs are inconsistent (Gate 0). Fix ui-bindings.yaml / design HTML / OpenAPI / Excel before running the AI loop.');
+    throw new Error(
+      'Inputs are inconsistent (Gate 0). Fix ui-bindings.yaml / design HTML / OpenAPI / Excel before running the AI loop.',
+    );
   }
   const baseline = await recordBaseline(paths, 'HEAD', cases.casesSha256);
-  log.info(`Baseline ${baseline.sha.slice(0, 12)} (${dirty.length ? `${dirty.length} pre-existing uncommitted change(s) count as changes` : 'clean tree'})`);
+  log.info(
+    `Baseline ${baseline.sha.slice(0, 12)} (${dirty.length ? `${dirty.length} pre-existing uncommitted change(s) count as changes` : 'clean tree'})`,
+  );
 
   const run: RunRecord = {
     runId,
@@ -253,9 +349,22 @@ export async function runFullLoop(paths: AidlcPaths, config: AidlcConfig, option
     let previous: GateResult[] = [];
     for (let i = 1; i <= maxIterations; i++) {
       log.step(`Iteration ${i} / ${maxIterations}`);
-      const iteration: IterationRecord = { index: i, startedAt: new Date().toISOString(), copilotCalls: [], gates: [], passed: false };
+      const iteration: IterationRecord = {
+        index: i,
+        startedAt: new Date().toISOString(),
+        copilotCalls: [],
+        gates: [],
+        passed: false,
+      };
       run.iterations.push(iteration);
-      const ctx = { paths, config, policy, iteration: i, maxIterations, caseCount: cases.cases.length };
+      const ctx = {
+        paths,
+        config,
+        policy,
+        iteration: i,
+        maxIterations,
+        caseCount: cases.cases.length,
+      };
       const iterDir = path.join(workDir, `iter-${i}`);
       iteration.copilotCalls.push(
         await callCopilot(paths, config, {
@@ -286,10 +395,18 @@ export async function runFullLoop(paths: AidlcPaths, config: AidlcConfig, option
       }
     }
     run.result = run.iterations[run.iterations.length - 1]?.passed ? 'passed' : 'exhausted';
-    const report = evaluateChanges(new BoundaryClassifier(policy), baseline.sha, await git.changesSince(baseline.sha));
+    const report = evaluateChanges(
+      new BoundaryClassifier(policy),
+      baseline.sha,
+      await git.changesSince(baseline.sha),
+    );
     run.changeStats = report.stats;
     mkdirSync(paths.outputs.reports, { recursive: true });
-    writeFileSync(path.join(paths.outputs.reports, 'final-quality-gate.md'), renderFinalGateReport(run), 'utf8');
+    writeFileSync(
+      path.join(paths.outputs.reports, 'final-quality-gate.md'),
+      renderFinalGateReport(run),
+      'utf8',
+    );
     if (run.result === 'exhausted') {
       const file = path.join(paths.outputs.reports, 'unresolved-issues.md');
       writeFileSync(file, renderUnresolved(run), 'utf8');
@@ -311,7 +428,11 @@ export async function runFullLoop(paths: AidlcPaths, config: AidlcConfig, option
   return run;
 }
 
-export async function runReverseDoc(paths: AidlcPaths, config: AidlcConfig, options: OrchestratorOptions): Promise<RunRecord> {
+export async function runReverseDoc(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  options: OrchestratorOptions,
+): Promise<RunRecord> {
   const runId = newRunId();
   const git = new Git(paths.root);
   let baseline: string | null = null;
@@ -332,7 +453,13 @@ export async function runReverseDoc(paths: AidlcPaths, config: AidlcConfig, opti
     postProcess: [],
   };
   try {
-    await postProcess(paths, config, run, path.join(paths.outputs.telemetry, runId, 'post'), options.dryRun);
+    await postProcess(
+      paths,
+      config,
+      run,
+      path.join(paths.outputs.telemetry, runId, 'post'),
+      options.dryRun,
+    );
     run.result = 'passed';
   } catch (error) {
     run.result = 'error';
@@ -365,12 +492,14 @@ export function parseOptions(argv: string[]): OrchestratorOptions {
   const toInt = (name: string, v: string | undefined) => {
     if (v === undefined) return undefined;
     const n = Number(v);
-    if (!Number.isInteger(n) || n < 1 || n > 50) throw new Error(`--${name} must be an integer between 1 and 50`);
+    if (!Number.isInteger(n) || n < 1 || n > 50)
+      throw new Error(`--${name} must be an integer between 1 and 50`);
     return n;
   };
   const maxIterations = toInt('max-iterations', values['max-iterations']);
   const simulatePassAt = toInt('simulate-pass-at', values['simulate-pass-at']);
-  if (simulatePassAt !== undefined && !values['dry-run']) throw new Error('--simulate-pass-at requires --dry-run');
+  if (simulatePassAt !== undefined && !values['dry-run'])
+    throw new Error('--simulate-pass-at requires --dry-run');
   return {
     mode,
     dryRun: values['dry-run'],
@@ -398,7 +527,9 @@ async function main(): Promise<number> {
   const checks = await validateEnvironment(paths, config, options.dryRun);
   if (!printChecks(checks)) throw new Error('Environment check failed (see above).');
   const run = await runFullLoop(paths, config, options);
-  log.step(`Result: ${run.result.toUpperCase()} (${run.iterations.length}/${run.maxIterations} iterations)${run.dryRun ? ' [dry-run]' : ''}`);
+  log.step(
+    `Result: ${run.result.toUpperCase()} (${run.iterations.length}/${run.maxIterations} iterations)${run.dryRun ? ' [dry-run]' : ''}`,
+  );
   log.info(`Telemetry: ${rel(root, paths.runHistory)}`);
   log.info(`Reports:   ${rel(root, paths.outputs.reports)}/`);
   if (options.dryRun) return 0;

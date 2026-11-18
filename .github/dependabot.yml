@@ -10,7 +10,8 @@ updates:
     labels: [dependencies]
     groups:
       angular:
-        patterns: ['@angular/*', '@angular-devkit/*', 'angular-eslint', '@angular-eslint/*', 'typescript']
+        patterns:
+          ['@angular/*', '@angular-devkit/*', 'angular-eslint', '@angular-eslint/*', 'typescript']
       test:
         patterns: ['vitest', '@vitest/*', '@playwright/test', 'jsdom']
       lint:

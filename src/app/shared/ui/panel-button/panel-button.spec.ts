@@ -5,7 +5,13 @@ import { PanelButton } from './panel-button';
 
 @Component({
   imports: [PanelButton],
-  template: `<app-panel-button variant="primary" uiId="ok" [disabled]="disabled()" (pressed)="count = count + 1">OK</app-panel-button>`,
+  template: `<app-panel-button
+    variant="primary"
+    uiId="ok"
+    [disabled]="disabled()"
+    (pressed)="count = count + 1"
+    >OK</app-panel-button
+  >`,
 })
 class Host {
   readonly disabled = signal(false);

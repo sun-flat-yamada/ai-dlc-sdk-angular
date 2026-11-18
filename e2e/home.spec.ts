@@ -4,7 +4,12 @@ test.describe('existing front panel (smoke)', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('**/api/v1/status', (route) =>
       route.fulfill({
-        json: { deviceName: 'Panel-01', firmwareVersion: '3.2.0', state: 'ready', alerts: ['E-101'] },
+        json: {
+          deviceName: 'Panel-01',
+          firmwareVersion: '3.2.0',
+          state: 'ready',
+          alerts: ['E-101'],
+        },
       }),
     );
   });

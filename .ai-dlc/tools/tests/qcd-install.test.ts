@@ -7,10 +7,19 @@ import { parseConfig } from '../lib/config.js';
 import { RunRecord } from '../lib/telemetry.js';
 import { REPO_ROOT, tempRepo, write } from './helpers.js';
 
-const config = parseConfig(readFileSync(path.join(REPO_ROOT, '.ai-dlc/config/aidlc.config.yaml'), 'utf8'));
+const config = parseConfig(
+  readFileSync(path.join(REPO_ROOT, '.ai-dlc/config/aidlc.config.yaml'), 'utf8'),
+);
 const human: HumanBaseline = {
   project: 'p',
-  quality: { subsystemTestFirstPassRate: 0.5, subsystemTestFinalPassRate: 1, unitTestCoverage: { lines: 70 }, staticAnalysisWarnings: 3, defectsFound: 4, sizeKloc: 2 },
+  quality: {
+    subsystemTestFirstPassRate: 0.5,
+    subsystemTestFinalPassRate: 1,
+    unitTestCoverage: { lines: 70 },
+    staticAnalysisWarnings: 3,
+    defectsFound: 4,
+    sizeKloc: 2,
+  },
   cost: { effortHours: { impl: 40, test: 20 }, hourlyRate: 10000, currency: 'JPY' },
   delivery: { leadTimeHours: 48, calendarDays: 6 },
 };
@@ -49,8 +58,22 @@ const run: RunRecord = {
       copilotCalls: [call('implement', 10)],
       passed: false,
       gates: [
-        { gate: 'lint', status: 'pass', durationMs: 0, summary: '', failures: [], metrics: { warnings: 2 } },
-        { gate: 'subsystem', status: 'fail', durationMs: 0, summary: '', failures: [], metrics: { cases: 8, passed: 6, passRate: 0.75 } },
+        {
+          gate: 'lint',
+          status: 'pass',
+          durationMs: 0,
+          summary: '',
+          failures: [],
+          metrics: { warnings: 2 },
+        },
+        {
+          gate: 'subsystem',
+          status: 'fail',
+          durationMs: 0,
+          summary: '',
+          failures: [],
+          metrics: { cases: 8, passed: 6, passRate: 0.75 },
+        },
       ],
     },
     {
@@ -59,13 +82,30 @@ const run: RunRecord = {
       copilotCalls: [call('fix', 5)],
       passed: true,
       gates: [
-        { gate: 'unit', status: 'pass', durationMs: 0, summary: '', failures: [], metrics: { coverageLines: 91.5, coverageStatements: 90 } },
-        { gate: 'subsystem', status: 'pass', durationMs: 0, summary: '', failures: [], metrics: { cases: 8, passed: 8, passRate: 1 } },
+        {
+          gate: 'unit',
+          status: 'pass',
+          durationMs: 0,
+          summary: '',
+          failures: [],
+          metrics: { coverageLines: 91.5, coverageStatements: 90 },
+        },
+        {
+          gate: 'subsystem',
+          status: 'pass',
+          durationMs: 0,
+          summary: '',
+          failures: [],
+          metrics: { cases: 8, passed: 8, passRate: 1 },
+        },
       ],
     },
   ],
   postProcess: [],
-  changeStats: { rebuildable: { files: 4, added: 500, deleted: 0 }, immutable: { files: 0, added: 0, deleted: 0 } },
+  changeStats: {
+    rebuildable: { files: 4, added: 500, deleted: 0 },
+    immutable: { files: 0, added: 0, deleted: 0 },
+  },
 };
 
 describe('calculateQcd', () => {
@@ -83,7 +123,15 @@ describe('calculateQcd', () => {
     });
     expect(r.quality.human.defectDensityPerKloc).toBe(2);
     // AI: 15 credits * 6 + (4 + 4) h * 8000; human: 60 h * 10000
-    expect(r.cost.ai).toMatchObject({ copilotCalls: 2, aiCredits: 15, aiCost: 90, humanHours: 8, humanCost: 64000, totalCost: 64090, tokensAreEstimated: false });
+    expect(r.cost.ai).toMatchObject({
+      copilotCalls: 2,
+      aiCredits: 15,
+      aiCost: 90,
+      humanHours: 8,
+      humanCost: 64000,
+      totalCost: 64090,
+      tokensAreEstimated: false,
+    });
     expect(r.cost.human.totalCost).toBe(600000);
     expect(r.cost.reductionRate).toBeCloseTo((600000 - 64090) / 600000);
     expect(r.delivery.ai).toMatchObject({ leadTimeHours: 2, iterations: 2, maxIterations: 5 });
@@ -91,7 +139,10 @@ describe('calculateQcd', () => {
   });
 
   it('does not report reductions for dry-runs or runs that did not pass', () => {
-    for (const r of [calculateQcd({ ...run, dryRun: true }, human, config), calculateQcd({ ...run, result: 'exhausted' }, human, config)]) {
+    for (const r of [
+      calculateQcd({ ...run, dryRun: true }, human, config),
+      calculateQcd({ ...run, result: 'exhausted' }, human, config),
+    ]) {
       expect(r.comparable).toBe(false);
       expect(r.cost.reductionRate).toBeNull();
       expect(r.delivery.reductionRate).toBeNull();
@@ -119,7 +170,11 @@ describe('install', () => {
 
   it('merges scripts and harness devDependencies without overriding existing entries', () => {
     const merged = mergePackageJson(
-      { name: 'x', scripts: { build: 'ng build', 'aidlc:run': 'custom' }, devDependencies: { tsx: '^1.0.0' } },
+      {
+        name: 'x',
+        scripts: { build: 'ng build', 'aidlc:run': 'custom' },
+        devDependencies: { tsx: '^1.0.0' },
+      },
       JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')),
     );
     const scripts = merged['scripts'] as Record<string, string>;
@@ -139,21 +194,31 @@ describe('install', () => {
     write(repo.dir, '.github/skills/02-angular-panel-impl/SKILL.md', 'customized');
 
     const plan = planInstall(REPO_ROOT, repo.dir, { withSample: false, force: false });
-    expect(plan.find((a) => a.target === '.github/skills/02-angular-panel-impl/SKILL.md')?.kind).toBe('skip');
+    expect(
+      plan.find((a) => a.target === '.github/skills/02-angular-panel-impl/SKILL.md')?.kind,
+    ).toBe('skip');
     expect(plan.some((a) => a.target.startsWith('.ai-dlc/tools/tests/'))).toBe(false);
     expect(plan.some((a) => a.target.includes('ui-bindings.yaml'))).toBe(false);
 
     runInstall(REPO_ROOT, repo.dir, { withSample: false, force: false, dryRun: false });
-    expect(readFileSync(path.join(repo.dir, '.github/skills/02-angular-panel-impl/SKILL.md'), 'utf8')).toBe('customized');
+    expect(
+      readFileSync(path.join(repo.dir, '.github/skills/02-angular-panel-impl/SKILL.md'), 'utf8'),
+    ).toBe('customized');
     expect(existsSync(path.join(repo.dir, '.ai-dlc/tools/orchestrator.ts'))).toBe(true);
     expect(existsSync(path.join(repo.dir, '.ai-dlc/inputs/ui-bindings'))).toBe(true);
-    expect(readFileSync(path.join(repo.dir, '.ai-dlc/config/aidlc.config.yaml'), 'utf8')).toMatch(/angularProject: my-panel/);
-    expect(readFileSync(path.join(repo.dir, '.gitignore'), 'utf8')).toContain('/.ai-dlc/outputs/**');
+    expect(readFileSync(path.join(repo.dir, '.ai-dlc/config/aidlc.config.yaml'), 'utf8')).toMatch(
+      /angularProject: my-panel/,
+    );
+    expect(readFileSync(path.join(repo.dir, '.gitignore'), 'utf8')).toContain(
+      '/.ai-dlc/outputs/**',
+    );
   });
 
   it('refuses a target without angular.json', () => {
     const repo = tempRepo();
     cleanup = repo.cleanup;
-    expect(() => runInstall(REPO_ROOT, repo.dir, { withSample: false, force: false, dryRun: true })).toThrow(/angular.json/);
+    expect(() =>
+      runInstall(REPO_ROOT, repo.dir, { withSample: false, force: false, dryRun: true }),
+    ).toThrow(/angular.json/);
   });
 });

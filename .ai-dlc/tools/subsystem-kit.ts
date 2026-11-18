@@ -19,7 +19,9 @@ import type { SubsystemCase, SubsystemCaseFile } from './lib/subsystem-cases.js'
 
 export { expect, test } from '@playwright/test';
 
-const casesFile = fileURLToPath(new URL('../outputs/generated-tests/subsystem-cases.json', import.meta.url));
+const casesFile = fileURLToPath(
+  new URL('../outputs/generated-tests/subsystem-cases.json', import.meta.url),
+);
 let cache: SubsystemCaseFile | undefined;
 
 /** Loads one case by ID from `subsystem-cases.json`. Throws when the ID does not exist. */
@@ -49,7 +51,9 @@ const pathOf = (url: string) => new URL(url).pathname;
 
 /** Matches `/api/v1/items/{id}` style templates against a concrete path. */
 export function pathMatches(template: string, actual: string): boolean {
-  const re = new RegExp(`^${template.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\\?\{[^}]+\\?\}/g, '[^/]+')}$`);
+  const re = new RegExp(
+    `^${template.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\\?\{[^}]+\\?\}/g, '[^/]+')}$`,
+  );
   return re.test(actual);
 }
 
@@ -68,7 +72,11 @@ function bodyOf(request: Request): unknown {
  * and records the requests. Unmocked calls answer 404 so that missing mocks surface as failures.
  * Later lines for the same endpoint are served in order (the last one repeats).
  */
-export async function mockDeviceApi(page: Page, testCase: SubsystemCase, extra: SubsystemCase['mockApi'] = []): Promise<DeviceApiRecorder> {
+export async function mockDeviceApi(
+  page: Page,
+  testCase: SubsystemCase,
+  extra: SubsystemCase['mockApi'] = [],
+): Promise<DeviceApiRecorder> {
   const recorder: DeviceApiRecorder = { requests: [] };
   const mocks = [...testCase.mockApi, ...extra];
   const served = new Map<string, number>();
@@ -79,7 +87,11 @@ export async function mockDeviceApi(page: Page, testCase: SubsystemCase, extra: 
     recorder.requests.push({ method, path, body: bodyOf(request) });
     const candidates = mocks.filter((m) => m.method === method && pathMatches(m.path, path));
     if (candidates.length === 0) {
-      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: `no mock for ${method} ${path}` }) });
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: `no mock for ${method} ${path}` }),
+      });
       return;
     }
     const key = `${method} ${candidates[0]!.path}`;
@@ -89,7 +101,12 @@ export async function mockDeviceApi(page: Page, testCase: SubsystemCase, extra: 
     await route.fulfill({
       status: mock.status,
       contentType: 'application/json',
-      body: mock.body === undefined ? '' : typeof mock.body === 'string' ? mock.body : JSON.stringify(mock.body),
+      body:
+        mock.body === undefined
+          ? ''
+          : typeof mock.body === 'string'
+            ? mock.body
+            : JSON.stringify(mock.body),
     });
   });
   return recorder;
@@ -100,21 +117,37 @@ export function isSubset(expected: unknown, actual: unknown): boolean {
   if (expected === null || typeof expected !== 'object') return Object.is(expected, actual);
   if (actual === null || typeof actual !== 'object') return false;
   if (Array.isArray(expected)) {
-    return Array.isArray(actual) && expected.length === actual.length && expected.every((e, i) => isSubset(e, actual[i]));
+    return (
+      Array.isArray(actual) &&
+      expected.length === actual.length &&
+      expected.every((e, i) => isSubset(e, actual[i]))
+    );
   }
-  return Object.entries(expected as Record<string, unknown>).every(([k, v]) => isSubset(v, (actual as Record<string, unknown>)[k]));
+  return Object.entries(expected as Record<string, unknown>).every(([k, v]) =>
+    isSubset(v, (actual as Record<string, unknown>)[k]),
+  );
 }
 
 /** Asserts that every expected API request of the case was sent (method, path, body subset). */
-export async function expectApiRequests(recorder: DeviceApiRecorder, testCase: SubsystemCase, timeout = 5000): Promise<void> {
+export async function expectApiRequests(
+  recorder: DeviceApiRecorder,
+  testCase: SubsystemCase,
+  timeout = 5000,
+): Promise<void> {
   for (const exp of testCase.expectedApi) {
     await expect
       .poll(
         () =>
           recorder.requests.some(
-            (r) => r.method === exp.method && pathMatches(exp.path, r.path) && (exp.body === undefined || isSubset(exp.body, r.body)),
+            (r) =>
+              r.method === exp.method &&
+              pathMatches(exp.path, r.path) &&
+              (exp.body === undefined || isSubset(exp.body, r.body)),
           ),
-        { message: `[${testCase.id}] expected request: ${exp.raw}\nrecorded: ${JSON.stringify(recorder.requests)}`, timeout },
+        {
+          message: `[${testCase.id}] expected request: ${exp.raw}\nrecorded: ${JSON.stringify(recorder.requests)}`,
+          timeout,
+        },
       )
       .toBe(true);
   }
@@ -122,7 +155,9 @@ export async function expectApiRequests(recorder: DeviceApiRecorder, testCase: S
 
 /** Asserts that no request matching `METHOD /path` was sent (e.g. invalid input must not be saved). */
 export function expectNoRequest(recorder: DeviceApiRecorder, method: string, path: string): void {
-  const hit = recorder.requests.find((r) => r.method === method.toUpperCase() && pathMatches(path, r.path));
+  const hit = recorder.requests.find(
+    (r) => r.method === method.toUpperCase() && pathMatches(path, r.path),
+  );
   expect(hit, `unexpected request ${method} ${path}`).toBeUndefined();
 }
 
@@ -130,7 +165,11 @@ export function expectNoRequest(recorder: DeviceApiRecorder, method: string, pat
  * Asserts the case's CSS expectations. A selector of the form `@ui-id` targets `[data-ui-id="ui-id"]`.
  * Expectations without a selector need `defaultUiId`.
  */
-export async function expectCss(page: Page, testCase: SubsystemCase, defaultUiId?: string): Promise<void> {
+export async function expectCss(
+  page: Page,
+  testCase: SubsystemCase,
+  defaultUiId?: string,
+): Promise<void> {
   for (const css of testCase.expectedCss) {
     const selector = css.selector ?? (defaultUiId ? `@${defaultUiId}` : undefined);
     if (!selector) throw new Error(`[${testCase.id}] CSS expectation "${css.raw}" has no selector`);

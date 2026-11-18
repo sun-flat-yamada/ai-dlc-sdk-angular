@@ -16,7 +16,14 @@ import { z } from 'zod';
 const id = z.string().regex(/^[a-z][a-z0-9-]*$/, 'kebab-case identifier');
 
 /** API error kinds (ApiError.kind in src/app/core/http/api-error.ts). */
-export const ERROR_KINDS = ['validation', 'busy', 'not-found', 'timeout', 'offline', 'server'] as const;
+export const ERROR_KINDS = [
+  'validation',
+  'busy',
+  'not-found',
+  'timeout',
+  'offline',
+  'server',
+] as const;
 
 const outcomeSchema = z.object({
   /** Next screen state. */
@@ -44,12 +51,27 @@ const actionSchema = outcomeSchema.extend({
 const sourceSchema = z.object({
   call: z.string(),
   /** Polling interval such as `5s` or `500ms`. Omit to load once on screen entry. */
-  poll: z.string().regex(/^\d+(ms|s)$/).optional(),
+  poll: z
+    .string()
+    .regex(/^\d+(ms|s)$/)
+    .optional(),
   /** Simple JSONPath into the response body (`$.link`, `$.ipv4.address`). */
-  path: z.string().regex(/^\$(\.[A-Za-z_][\w]*)*$/).default('$'),
+  path: z
+    .string()
+    .regex(/^\$(\.[A-Za-z_][\w]*)*$/)
+    .default('$'),
 });
 
-export const ELEMENT_KINDS = ['button', 'toggle', 'input', 'select', 'indicator', 'text', 'list', 'container'] as const;
+export const ELEMENT_KINDS = [
+  'button',
+  'toggle',
+  'input',
+  'select',
+  'indicator',
+  'text',
+  'list',
+  'container',
+] as const;
 
 const elementSchema = z.object({
   kind: z.enum(ELEMENT_KINDS),

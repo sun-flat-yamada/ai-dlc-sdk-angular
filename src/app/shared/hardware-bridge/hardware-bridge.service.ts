@@ -17,8 +17,7 @@ export const NATIVE_PANEL_BRIDGE = new InjectionToken<NativePanelBridge | null>(
   'NATIVE_PANEL_BRIDGE',
   {
     providedIn: 'root',
-    factory: () =>
-      (globalThis as { panelBridge?: NativePanelBridge }).panelBridge ?? null,
+    factory: () => (globalThis as { panelBridge?: NativePanelBridge }).panelBridge ?? null,
   },
 );
 

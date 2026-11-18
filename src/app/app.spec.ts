@@ -25,6 +25,8 @@ describe('App', () => {
     await fixture.whenStable();
 
     expect(start).toHaveBeenCalledOnce();
-    expect((fixture.nativeElement as HTMLElement).querySelector('[data-ui-id="status-bar"]')).not.toBeNull();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-ui-id="status-bar"]'),
+    ).not.toBeNull();
   });
 });

@@ -6,18 +6,44 @@ const esc = (s: string) => s.replace(/\|/g, '\\|');
 const code = (s: string) => `\`${esc(s)}\``;
 const table = (header: string[], rows: string[][], empty = '_(none)_') =>
   rows.length
-    ? [`| ${header.join(' | ')} |`, `| ${header.map(() => '---').join(' | ')} |`, ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n')
+    ? [
+        `| ${header.join(' | ')} |`,
+        `| ${header.map(() => '---').join(' | ')} |`,
+        ...rows.map((r) => `| ${r.join(' | ')} |`),
+      ].join('\n')
     : empty;
 const mermaidId = (s: string) => s.replace(/[^A-Za-z0-9_]/g, '_');
 
 /** Normalizes `/api/v1/network/ipv4` and `network/ipv4` to `network/ipv4` for matching. */
 export function apiKey(p: string): string {
-  return p.replace(/^\/+/, '').replace(/^api\/v\d+\//, '').replace(/\$\{[^}]+\}/g, '{param}').toLowerCase();
+  return p
+    .replace(/^\/+/, '')
+    .replace(/^api\/v\d+\//, '')
+    .replace(/\$\{[^}]+\}/g, '{param}')
+    .toLowerCase();
 }
 
-export function renderPlaceholders(facts: ReverseDocFacts, gateStatus: string): Record<string, string> {
-  const zoneOrder = ['immutable', 'extensible', 'rebuildable', 'deletable', 'ignored', 'unclassified'];
-  const nodes = [...facts.components.map((c) => ({ ...c, kind: 'component' })), ...facts.services.map((s) => ({ ...s, kind: 'service', selector: '', usesServices: [] as string[] }))];
+export function renderPlaceholders(
+  facts: ReverseDocFacts,
+  gateStatus: string,
+): Record<string, string> {
+  const zoneOrder = [
+    'immutable',
+    'extensible',
+    'rebuildable',
+    'deletable',
+    'ignored',
+    'unclassified',
+  ];
+  const nodes = [
+    ...facts.components.map((c) => ({ ...c, kind: 'component' })),
+    ...facts.services.map((s) => ({
+      ...s,
+      kind: 'service',
+      selector: '',
+      usesServices: [] as string[],
+    })),
+  ];
   const diagram = ['```mermaid', 'flowchart LR'];
   for (const zone of zoneOrder) {
     const inZone = nodes.filter((n) => n.zone === zone);
@@ -28,7 +54,8 @@ export function renderPlaceholders(facts: ReverseDocFacts, gateStatus: string): 
   }
   const known = new Set(nodes.map((n) => n.className));
   for (const c of facts.components) {
-    for (const s of c.usesServices) if (known.has(s)) diagram.push(`  ${mermaidId(c.className)} --> ${mermaidId(s)}`);
+    for (const s of c.usesServices)
+      if (known.has(s)) diagram.push(`  ${mermaidId(c.className)} --> ${mermaidId(s)}`);
   }
   for (const removed of facts.changes.filter((c) => c.status === 'deleted')) {
     diagram.push(`  %% deleted: ${removed.path}`);
@@ -37,7 +64,9 @@ export function renderPlaceholders(facts: ReverseDocFacts, gateStatus: string): 
 
   const sequences: string[] = [];
   for (const s of facts.services.filter((x) => x.apiCalls.length)) {
-    const users = facts.components.filter((c) => c.usesServices.includes(s.className)).map((c) => c.className);
+    const users = facts.components
+      .filter((c) => c.usesServices.includes(s.className))
+      .map((c) => c.className);
     const comp = users[0] ?? 'Component';
     sequences.push(
       [
@@ -68,7 +97,11 @@ export function renderPlaceholders(facts: ReverseDocFacts, gateStatus: string): 
 
   const specOf = (file: string) => file.replace(/\.ts$/, '.spec.ts');
   const traceRows = facts.subsystemCases.map((c) => {
-    const impl = facts.services.filter((s) => s.apiCalls.some((a) => c.expectedApi.some((e) => apiKey(e.split(' ')[1] ?? '') === apiKey(a.path))));
+    const impl = facts.services.filter((s) =>
+      s.apiCalls.some((a) =>
+        c.expectedApi.some((e) => apiKey(e.split(' ')[1] ?? '') === apiKey(a.path)),
+      ),
+    );
     return [
       c.requirements.map(code).join('<br>') || '—',
       code(c.id),
@@ -76,7 +109,10 @@ export function renderPlaceholders(facts: ReverseDocFacts, gateStatus: string): 
       c.uiRefs.map((u) => code(`@${u}`)).join(' ') || '—',
       c.expectedApi.map(code).join('<br>') || '—',
       impl.map((s) => code(s.className)).join('<br>') || '_(to be mapped)_',
-      impl.filter((s) => s.hasSpec).map((s) => code(specOf(s.file))).join('<br>') || '—',
+      impl
+        .filter((s) => s.hasSpec)
+        .map((s) => code(specOf(s.file)))
+        .join('<br>') || '—',
     ];
   });
 
@@ -86,11 +122,19 @@ export function renderPlaceholders(facts: ReverseDocFacts, gateStatus: string): 
     gateStatus,
     zoneTable: table(
       ['Zone', 'Paths'],
-      Object.entries(facts.zones).filter(([, p]) => p.length).map(([z, p]) => [code(z), p.map(code).join('<br>')]),
+      Object.entries(facts.zones)
+        .filter(([, p]) => p.length)
+        .map(([z, p]) => [code(z), p.map(code).join('<br>')]),
     ),
     changeTable: table(
       ['Path', 'Zone', 'Status', '+', '-'],
-      facts.changes.map((c) => [code(c.path), c.zone, c.status, String(c.added ?? '—'), String(c.deleted ?? '—')]),
+      facts.changes.map((c) => [
+        code(c.path),
+        c.zone,
+        c.status,
+        String(c.added ?? '—'),
+        String(c.deleted ?? '—'),
+      ]),
       '_(no changes since the baseline)_',
     ),
     componentDiagram: diagram.join('\n'),
@@ -105,16 +149,35 @@ export function renderPlaceholders(facts: ReverseDocFacts, gateStatus: string): 
         c.hasSpec ? '✅' : '❌',
       ]),
     ),
-    routeTable: table(['Route', 'Target'], facts.routes.map((r) => [code(r.path), code(r.target)])),
+    routeTable: table(
+      ['Route', 'Target'],
+      facts.routes.map((r) => [code(r.path), code(r.target)]),
+    ),
     uiDesignFiles: facts.uiDesignFiles.map((f) => `- ${code(f)}`).join('\n') || '_(none)_',
     apiSpecFiles: facts.apiSpecFiles.map((f) => `- ${code(f)}`).join('\n') || '_(none)_',
     requirementFiles: facts.requirementFiles.map((f) => `- ${code(f)}`).join('\n') || '_(none)_',
     serviceApiTable: table(
       ['Service', 'Zone', 'API calls', 'Unit test'],
-      facts.services.map((s) => [code(s.className), s.zone, s.apiCalls.map((a) => code(`${a.method} ${a.path}`)).join('<br>') || '—', s.hasSpec ? '✅' : '❌']),
+      facts.services.map((s) => [
+        code(s.className),
+        s.zone,
+        s.apiCalls.map((a) => code(`${a.method} ${a.path}`)).join('<br>') || '—',
+        s.hasSpec ? '✅' : '❌',
+      ]),
     ),
     apiSequences: sequences.join('\n\n') || '_(no REST API calls found)_',
-    traceabilityTable: table(['Requirement', 'Case ID', 'Title', 'UI elements', 'Expected API', 'Implementation', 'Unit test'], traceRows),
+    traceabilityTable: table(
+      [
+        'Requirement',
+        'Case ID',
+        'Title',
+        'UI elements',
+        'Expected API',
+        'Implementation',
+        'Unit test',
+      ],
+      traceRows,
+    ),
   };
 }
 
@@ -135,9 +198,15 @@ export function renderReverseDocs(
   mkdirSync(outDir, { recursive: true });
   const values = { ...renderPlaceholders(facts, gateStatus), ...extra };
   const written: string[] = [];
-  for (const name of readdirSync(templatesDir).filter((f) => f.endsWith('.md')).sort()) {
+  for (const name of readdirSync(templatesDir)
+    .filter((f) => f.endsWith('.md'))
+    .sort()) {
     const out = path.join(outDir, name);
-    writeFileSync(out, fillTemplate(readFileSync(path.join(templatesDir, name), 'utf8'), values), 'utf8');
+    writeFileSync(
+      out,
+      fillTemplate(readFileSync(path.join(templatesDir, name), 'utf8'), values),
+      'utf8',
+    );
     written.push(out);
   }
   return written;

@@ -16,32 +16,67 @@ interface Rule {
 }
 
 const RULES: Rule[] = [
-  { id: 'github-token', pattern: /\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/, description: 'GitHub token' },
-  { id: 'aws-access-key', pattern: /\b(AKIA|ASIA)[0-9A-Z]{16}\b/, description: 'AWS access key id' },
-  { id: 'private-key', pattern: /-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY( BLOCK)?-----/, description: 'Private key' },
+  {
+    id: 'github-token',
+    pattern: /\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/,
+    description: 'GitHub token',
+  },
+  {
+    id: 'aws-access-key',
+    pattern: /\b(AKIA|ASIA)[0-9A-Z]{16}\b/,
+    description: 'AWS access key id',
+  },
+  {
+    id: 'private-key',
+    pattern: /-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY( BLOCK)?-----/,
+    description: 'Private key',
+  },
   { id: 'slack-token', pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/, description: 'Slack token' },
-  { id: 'openai-key', pattern: /\bsk-(proj-)?[A-Za-z0-9_-]{32,}\b/, description: 'OpenAI-style API key' },
-  { id: 'anthropic-key', pattern: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/, description: 'Anthropic API key' },
+  {
+    id: 'openai-key',
+    pattern: /\bsk-(proj-)?[A-Za-z0-9_-]{32,}\b/,
+    description: 'OpenAI-style API key',
+  },
+  {
+    id: 'anthropic-key',
+    pattern: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/,
+    description: 'Anthropic API key',
+  },
   { id: 'google-api-key', pattern: /\bAIza[0-9A-Za-z_-]{35}\b/, description: 'Google API key' },
   { id: 'npm-token', pattern: /\bnpm_[A-Za-z0-9]{36}\b/, description: 'npm token' },
   {
     id: 'hardcoded-secret',
-    pattern: /\b(password|passwd|secret|api[_-]?key|access[_-]?token)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/i,
+    pattern:
+      /\b(password|passwd|secret|api[_-]?key|access[_-]?token)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/i,
     description: 'Hard-coded secret assignment',
   },
   {
     id: 'email',
-    pattern: /\b[A-Za-z0-9._%+-]+@(?!(?:example\.(?:com|org|net|invalid)|users\.noreply\.github\.com|anthropic\.com)\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/,
+    pattern:
+      /\b[A-Za-z0-9._%+-]+@(?!(?:example\.(?:com|org|net|invalid)|users\.noreply\.github\.com|anthropic\.com)\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/,
     description: 'Personal e-mail address (use example.invalid)',
   },
-  { id: 'user-home-path', pattern: /\b[A-Za-z]:\\Users\\(?!Public\\|Default\\|<)[^\\\s"'`]+\\|\/home\/(?!runner\/|user\/|<)[a-z0-9._-]+\/|\/Users\/(?!Shared\/|<)[A-Za-z0-9._-]+\//, description: 'Absolute user home path' },
+  {
+    id: 'user-home-path',
+    pattern:
+      /\b[A-Za-z]:\\Users\\(?!Public\\|Default\\|<)[^\\\s"'`]+\\|\/home\/(?!runner\/|user\/|<)[a-z0-9._-]+\/|\/Users\/(?!Shared\/|<)[A-Za-z0-9._-]+\//,
+    description: 'Absolute user home path',
+  },
 ];
 
-const SKIP = [/^package-lock\.json$/, /\.(xlsx|png|ico|jpg|jpeg|gif|woff2?)$/i, /^scripts\/scan-secrets\.ts$/];
+const SKIP = [
+  /^package-lock\.json$/,
+  /\.(xlsx|png|ico|jpg|jpeg|gif|woff2?)$/i,
+  /^scripts\/scan-secrets\.ts$/,
+];
 const MAX_BYTES = 2_000_000;
 
 function listFiles(): string[] {
-  const out = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { encoding: 'utf8' });
+  const out = execFileSync(
+    'git',
+    ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+    { encoding: 'utf8' },
+  );
   return out.split('\0').filter(Boolean);
 }
 
@@ -62,7 +97,13 @@ export function scanText(file: string, text: string): Finding[] {
       if (m) {
         const hit = m[0];
         const masked = hit.length > 8 ? `${hit.slice(0, 4)}…${hit.slice(-2)}` : '****';
-        findings.push({ file, line: i + 1, rule: rule.id, description: rule.description, excerpt: masked });
+        findings.push({
+          file,
+          line: i + 1,
+          rule: rule.id,
+          description: rule.description,
+          excerpt: masked,
+        });
       }
     }
   });

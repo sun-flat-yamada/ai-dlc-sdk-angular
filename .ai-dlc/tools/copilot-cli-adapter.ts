@@ -48,7 +48,9 @@ async function dirtyFingerprint(git: Git, root: string): Promise<Map<string, str
   for (const line of await git.statusLines()) {
     const file = line.slice(3).replace(/^"|"$/g, '').split(' -> ').pop()!;
     const abs = path.join(root, file);
-    const hash = existsSync(abs) ? createHash('sha1').update(readFileSync(abs)).digest('hex') : 'deleted';
+    const hash = existsSync(abs)
+      ? createHash('sha1').update(readFileSync(abs)).digest('hex')
+      : 'deleted';
     map.set(file, `${line.slice(0, 2)}:${hash}`);
   }
   return map;
@@ -82,7 +84,9 @@ export async function callCopilot(
   let output = '';
   if (request.dryRun) {
     output = `[dry-run] ${command.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}\n`;
-    log.info(`dry-run: Copilot CLI not called (${request.id}, skills: ${request.skills.join(', ')})`);
+    log.info(
+      `dry-run: Copilot CLI not called (${request.id}, skills: ${request.skills.join(', ')})`,
+    );
   } else {
     log.info(`Copilot CLI: ${request.id} (skills: ${request.skills.join(', ')})`);
     const result = await exec(command, {
@@ -92,7 +96,8 @@ export async function callCopilot(
     });
     exitCode = result.exitCode;
     output = result.output;
-    if (result.timedOut) log.warn(`Copilot CLI timed out after ${config.copilot.timeoutMinutes} min`);
+    if (result.timedOut)
+      log.warn(`Copilot CLI timed out after ${config.copilot.timeoutMinutes} min`);
   }
   writeFileSync(outputFile, output, 'utf8');
   const endedAt = new Date();
@@ -122,8 +127,14 @@ export async function callCopilot(
 }
 
 /** Checks that the Copilot CLI is installed. */
-export async function probeCopilot(paths: AidlcPaths, config: AidlcConfig): Promise<{ ok: boolean; version: string }> {
-  const r = await exec([config.copilot.command, '--version'], { cwd: paths.root, timeoutMs: 60_000 });
+export async function probeCopilot(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+): Promise<{ ok: boolean; version: string }> {
+  const r = await exec([config.copilot.command, '--version'], {
+    cwd: paths.root,
+    timeoutMs: 60_000,
+  });
   return { ok: r.exitCode === 0, version: r.output.trim().split(/\r?\n/)[0] ?? '' };
 }
 

@@ -14,7 +14,12 @@ describe('HomePage', () => {
         {
           provide: PanelStatusService,
           useValue: {
-            status: signal({ deviceName: 'P', firmwareVersion: '3.2.0', state: 'ready', alerts: [] }),
+            status: signal({
+              deviceName: 'P',
+              firmwareVersion: '3.2.0',
+              state: 'ready',
+              alerts: [],
+            }),
           },
         },
       ],
@@ -35,7 +40,9 @@ describe('HomePage', () => {
     const fixture = TestBed.createComponent(HomePage);
     await fixture.whenStable();
 
-    (fixture.nativeElement.querySelector('[data-ui-id="menu-network"]') as HTMLButtonElement).click();
+    (
+      fixture.nativeElement.querySelector('[data-ui-id="menu-network"]') as HTMLButtonElement
+    ).click();
 
     expect(navigate).toHaveBeenCalledWith(HOME_MENU[0]!.route);
   });

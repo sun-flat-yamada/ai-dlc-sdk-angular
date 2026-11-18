@@ -1,3 +1,8 @@
 {
-  "recommendations": ["angular.ng-template", "redhat.vscode-yaml", "dbaeumer.vscode-eslint", "ms-playwright.playwright"]
+  "recommendations": [
+    "angular.ng-template",
+    "redhat.vscode-yaml",
+    "dbaeumer.vscode-eslint",
+    "ms-playwright.playwright"
+  ]
 }

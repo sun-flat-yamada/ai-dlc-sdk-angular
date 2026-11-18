@@ -7,7 +7,9 @@ import {
 
 describe('HardwareBridgeService', () => {
   it('is a no-op without a native bridge', () => {
-    TestBed.configureTestingModule({ providers: [{ provide: NATIVE_PANEL_BRIDGE, useValue: null }] });
+    TestBed.configureTestingModule({
+      providers: [{ provide: NATIVE_PANEL_BRIDGE, useValue: null }],
+    });
     const service = TestBed.inject(HardwareBridgeService);
     expect(service.isNative).toBe(false);
     expect(() => service.beep()).not.toThrow();
@@ -16,7 +18,9 @@ describe('HardwareBridgeService', () => {
 
   it('forwards calls to the native bridge and clamps the backlight', () => {
     const bridge: NativePanelBridge = { beep: vi.fn(), setBacklight: vi.fn() };
-    TestBed.configureTestingModule({ providers: [{ provide: NATIVE_PANEL_BRIDGE, useValue: bridge }] });
+    TestBed.configureTestingModule({
+      providers: [{ provide: NATIVE_PANEL_BRIDGE, useValue: bridge }],
+    });
     const service = TestBed.inject(HardwareBridgeService);
 
     service.beep('error');

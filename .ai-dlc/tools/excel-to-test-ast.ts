@@ -48,12 +48,38 @@ export const DEFAULT_HEADER_ALIASES: Record<CaseField, string[]> = {
   title: ['title', 'test item', 'test name', 'テスト項目', '確認項目', '中項目', 'テスト名'],
   priority: ['priority', '優先度', '重要度'],
   preconditions: ['preconditions', 'precondition', '前提条件'],
-  initialDeviceState: ['initial device state', 'device state', '機器初期状態', '初期状態', '機器状態'],
-  mockApi: ['api responses', 'mock responses', 'api mock', 'api応答', 'モック応答', 'api応答(モック)'],
+  initialDeviceState: [
+    'initial device state',
+    'device state',
+    '機器初期状態',
+    '初期状態',
+    '機器状態',
+  ],
+  mockApi: [
+    'api responses',
+    'mock responses',
+    'api mock',
+    'api応答',
+    'モック応答',
+    'api応答(モック)',
+  ],
   steps: ['steps', 'procedure', 'operation', '操作手順', '手順', 'フロントパネル操作手順'],
-  expectedUi: ['expected ui', 'expected display', 'expected result', '期待画面表示', '期待結果', '期待値(画面)'],
+  expectedUi: [
+    'expected ui',
+    'expected display',
+    'expected result',
+    '期待画面表示',
+    '期待結果',
+    '期待値(画面)',
+  ],
   expectedCss: ['expected css', 'expected style', '期待css状態', '期待css', '期待スタイル'],
-  expectedApi: ['expected api request', 'expected request', 'expected api', '期待apiリクエスト', '期待api'],
+  expectedApi: [
+    'expected api request',
+    'expected request',
+    'expected api',
+    '期待apiリクエスト',
+    '期待api',
+  ],
   notes: ['notes', 'remarks', '備考'],
 };
 
@@ -128,7 +154,8 @@ export function parseWorkbook(
     if (options.sheets?.length && !options.sheets.includes(sheet.name)) continue;
     const header = detectHeader(sheet, aliases);
     if (!header) {
-      if (options.sheets?.length) result.warnings.push(`Sheet "${sheet.name}": no header row found`);
+      if (options.sheets?.length)
+        result.warnings.push(`Sheet "${sheet.name}": no header row found`);
       continue;
     }
     result.sheets.push(sheet.name);
@@ -136,7 +163,8 @@ export function parseWorkbook(
     for (let r = header.row + 1; r <= sheet.rowCount; r++) {
       const row = sheet.getRow(r);
       const raw: Partial<Record<CaseField, string>> = {};
-      for (const [col, field] of header.columns) raw[field] = cellText(row.getCell(col).value).trim();
+      for (const [col, field] of header.columns)
+        raw[field] = cellText(row.getCell(col).value).trim();
       // Category cells are often merged / left blank below the first row of a group.
       if (raw.category) category = raw.category;
       const id = raw.id ?? '';
@@ -165,17 +193,32 @@ export function parseWorkbook(
         expectedUi: splitLines(raw.expectedUi ?? ''),
         expectedCss: parseCss(raw.expectedCss ?? ''),
         expectedApi: parseApiRequests(raw.expectedApi ?? ''),
-        uiRefs: extractUiRefs(raw.preconditions ?? '', raw.steps ?? '', raw.expectedUi ?? '', raw.expectedCss ?? ''),
+        uiRefs: extractUiRefs(
+          raw.preconditions ?? '',
+          raw.steps ?? '',
+          raw.expectedUi ?? '',
+          raw.expectedCss ?? '',
+        ),
         notes: raw.notes ?? '',
       };
       if (testCase.steps.length === 0) result.warnings.push(`${id}: no steps`);
-      if (!testCase.expectedUi.length && !testCase.expectedCss.length && !testCase.expectedApi.length) {
+      if (
+        !testCase.expectedUi.length &&
+        !testCase.expectedCss.length &&
+        !testCase.expectedApi.length
+      ) {
         result.warnings.push(`${id}: no expected result (UI / CSS / API)`);
       }
       const unparsedApi = splitLines(raw.expectedApi ?? '').length - testCase.expectedApi.length;
-      if (unparsedApi > 0) result.warnings.push(`${id}: ${unparsedApi} expected API line(s) not in "METHOD /path {json}" form`);
+      if (unparsedApi > 0)
+        result.warnings.push(
+          `${id}: ${unparsedApi} expected API line(s) not in "METHOD /path {json}" form`,
+        );
       const unparsedMock = splitLines(raw.mockApi ?? '').length - testCase.mockApi.length;
-      if (unparsedMock > 0) result.warnings.push(`${id}: ${unparsedMock} API response line(s) not in "METHOD /path -> 200 {json}" form`);
+      if (unparsedMock > 0)
+        result.warnings.push(
+          `${id}: ${unparsedMock} API response line(s) not in "METHOD /path -> 200 {json}" form`,
+        );
       result.cases.push(testCase);
     }
   }
@@ -236,7 +279,9 @@ export async function convertWorkbooks(
     const parsed = parseWorkbook(workbook, config.excel);
     for (const c of parsed.cases) {
       if (ids.has(c.id)) {
-        file.warnings.push(`${rel(paths.root, input)}: duplicate test ID "${c.id}" across workbooks — skipped`);
+        file.warnings.push(
+          `${rel(paths.root, input)}: duplicate test ID "${c.id}" across workbooks — skipped`,
+        );
         continue;
       }
       ids.add(c.id);
@@ -252,7 +297,11 @@ export async function convertWorkbooks(
   file.casesSha256 = hashCases(file.cases);
   writeJsonAtomic(paths.subsystemCases, file);
   mkdirSync(paths.outputs.generatedTests, { recursive: true });
-  writeFileSync(path.join(paths.outputs.generatedTests, 'subsystem-cases.md'), renderChecklist(file), 'utf8');
+  writeFileSync(
+    path.join(paths.outputs.generatedTests, 'subsystem-cases.md'),
+    renderChecklist(file),
+    'utf8',
+  );
   return file;
 }
 
@@ -263,7 +312,9 @@ async function main(): Promise<number> {
   const config = loadConfig(paths.config);
   const inputs = values.input?.map((f) => path.resolve(f));
   const file = await convertWorkbooks(paths, config, inputs);
-  log.info(`${file.cases.length} case(s) from ${file.sources.length} workbook(s) -> ${rel(root, paths.subsystemCases)}`);
+  log.info(
+    `${file.cases.length} case(s) from ${file.sources.length} workbook(s) -> ${rel(root, paths.subsystemCases)}`,
+  );
   for (const w of file.warnings) log.warn(w);
   return file.cases.length > 0 ? 0 : 1;
 }

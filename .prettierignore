@@ -8,3 +8,5 @@ package-lock.json
 playwright-report
 test-results
 *.md
+.ai-dlc/inputs
+specs

@@ -118,7 +118,9 @@ function formatGate(result: GateResult): string {
     .slice(0, 30)
     .map((f) => `- \`${f.where}\` — ${f.message.replace(/\n/g, ' ')}`)
     .join('\n');
-  const log = result.logTail ? `\n<details><summary>log tail</summary>\n\n\`\`\`text\n${result.logTail}\n\`\`\`\n</details>\n` : '';
+  const log = result.logTail
+    ? `\n<details><summary>log tail</summary>\n\n\`\`\`text\n${result.logTail}\n\`\`\`\n</details>\n`
+    : '';
   return `### Gate \`${result.gate}\`: ${result.status.toUpperCase()} — ${result.summary}\n\n${failures || '_(no structured failures)_'}\n${log}`;
 }
 
@@ -146,7 +148,11 @@ ${GUARDRAILS}
 `;
 }
 
-export function buildReverseDocPrompt(paths: AidlcPaths, config: AidlcConfig, factsFile: string): string {
+export function buildReverseDocPrompt(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  factsFile: string,
+): string {
   return `# AI-DLC task — reverse-generate design documents
 
 Apply ${skillRef(paths, SKILLS.reverseDoc)}. Read it completely first.

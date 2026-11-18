@@ -35,7 +35,9 @@ export function baselineFile(paths: AidlcPaths): string {
 
 export function readBaseline(paths: AidlcPaths): BaselineSnapshot | undefined {
   const file = baselineFile(paths);
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as BaselineSnapshot) : undefined;
+  return existsSync(file)
+    ? (JSON.parse(readFileSync(file, 'utf8')) as BaselineSnapshot)
+    : undefined;
 }
 
 export async function recordBaseline(
@@ -117,7 +119,8 @@ async function main(): Promise<number> {
     console.log(JSON.stringify(report, null, 2));
   } else {
     log.info(`Baseline: ${baseline}`);
-    for (const c of report.changes) log.info(`  ${c.status.padEnd(8)} ${c.zone.padEnd(12)} ${c.path}`);
+    for (const c of report.changes)
+      log.info(`  ${c.status.padEnd(8)} ${c.zone.padEnd(12)} ${c.path}`);
     for (const f of gate.failures) log.warn(`${f.where}: ${f.message}`);
     log.info(gate.summary);
   }

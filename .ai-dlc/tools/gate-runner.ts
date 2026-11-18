@@ -16,7 +16,14 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { readBaseline, runBoundaryGuard } from './boundary-guard.js';
 import { inputsGate } from './validate-inputs.js';
-import { AidlcConfig, AidlcPaths, GateConfig, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
+import {
+  AidlcConfig,
+  AidlcPaths,
+  GateConfig,
+  findRepoRoot,
+  loadConfig,
+  resolvePaths,
+} from './lib/config.js';
 import { exec, stripAnsi, tail } from './lib/exec.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import {
@@ -50,20 +57,31 @@ async function runCommand(paths: AidlcPaths, gate: GateConfig, echo: boolean) {
   return exec(gate.command, { cwd: paths.root, timeoutMs: gate.timeoutMinutes * 60_000, echo });
 }
 
-export async function runBuildGate(paths: AidlcPaths, config: AidlcConfig, echo = false): Promise<GateResult> {
+export async function runBuildGate(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  echo = false,
+): Promise<GateResult> {
   const r = await runCommand(paths, config.gates.build, echo);
   const failures = r.exitCode === 0 ? [] : parseBuildErrors(r.output);
   return {
     gate: 'build',
     status: r.exitCode === 0 ? 'pass' : 'fail',
     durationMs: r.durationMs,
-    summary: r.exitCode === 0 ? 'Build succeeded' : `Build failed (${failures.length} error(s))${r.timedOut ? ' — timed out' : ''}`,
+    summary:
+      r.exitCode === 0
+        ? 'Build succeeded'
+        : `Build failed (${failures.length} error(s))${r.timedOut ? ' — timed out' : ''}`,
     failures,
     logTail: r.exitCode === 0 ? undefined : tail(stripAnsi(r.output), 60),
   };
 }
 
-export async function runLintGate(paths: AidlcPaths, config: AidlcConfig, echo = false): Promise<GateResult> {
+export async function runLintGate(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  echo = false,
+): Promise<GateResult> {
   const r = await runCommand(paths, config.gates.lint, echo);
   const parsed = parseLintErrors(r.output);
   const pass = r.exitCode === 0;
@@ -74,13 +92,21 @@ export async function runLintGate(paths: AidlcPaths, config: AidlcConfig, echo =
     summary: pass
       ? `Lint passed (${parsed.warnings} warning(s))`
       : `Lint failed (${parsed.errors} error(s), ${parsed.warnings} warning(s))`,
-    failures: pass ? [] : parsed.failures.length ? parsed.failures : [{ where: 'lint', message: tail(stripAnsi(r.output), 5) }],
+    failures: pass
+      ? []
+      : parsed.failures.length
+        ? parsed.failures
+        : [{ where: 'lint', message: tail(stripAnsi(r.output), 5) }],
     metrics: { errors: parsed.errors, warnings: parsed.warnings },
     logTail: pass ? undefined : tail(stripAnsi(r.output), 60),
   };
 }
 
-export async function runUnitGate(paths: AidlcPaths, config: AidlcConfig, echo = false): Promise<GateResult> {
+export async function runUnitGate(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  echo = false,
+): Promise<GateResult> {
   const gate = config.gates.unit;
   const summaryFile = gate.coverage ? path.join(paths.root, gate.coverage.summaryFile) : undefined;
   if (summaryFile) rmSync(summaryFile, { force: true });
@@ -108,7 +134,12 @@ export async function runUnitGate(paths: AidlcPaths, config: AidlcConfig, echo =
         status: 'fail',
         durationMs: r.durationMs,
         summary: `Coverage summary not found: ${rel(paths.root, summaryFile)}`,
-        failures: [{ where: rel(paths.root, summaryFile), message: 'Run the unit tests with coverage (json-summary reporter).' }],
+        failures: [
+          {
+            where: rel(paths.root, summaryFile),
+            message: 'Run the unit tests with coverage (json-summary reporter).',
+          },
+        ],
         metrics,
       };
     }
@@ -119,30 +150,52 @@ export async function runUnitGate(paths: AidlcPaths, config: AidlcConfig, echo =
       coverageFunctions: cov.functions,
       coverageLines: cov.lines,
     });
-    const below = (Object.keys(cov) as (keyof typeof cov)[]).filter((k) => cov[k] < gate.coverage!.thresholds[k]);
+    const below = (Object.keys(cov) as (keyof typeof cov)[]).filter(
+      (k) => cov[k] < gate.coverage!.thresholds[k],
+    );
     if (below.length) {
       return {
         gate: 'unit',
         status: 'fail',
         durationMs: r.durationMs,
         summary: `Coverage below threshold: ${below.map((k) => `${k} ${cov[k]}% < ${gate.coverage!.thresholds[k]}%`).join(', ')}`,
-        failures: below.map((k) => ({ where: `coverage.${k}`, message: `${cov[k]}% < ${gate.coverage!.thresholds[k]}%` })),
+        failures: below.map((k) => ({
+          where: `coverage.${k}`,
+          message: `${cov[k]}% < ${gate.coverage!.thresholds[k]}%`,
+        })),
         metrics,
       };
     }
   }
-  return { gate: 'unit', status: 'pass', durationMs: r.durationMs, summary: `${passed} unit test(s) passed`, failures: [], metrics };
+  return {
+    gate: 'unit',
+    status: 'pass',
+    durationMs: r.durationMs,
+    summary: `${passed} unit test(s) passed`,
+    failures: [],
+    metrics,
+  };
 }
 
 function listSpecs(dir: string): string[] {
   if (!existsSync(dir)) return [];
-  return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) => /\.spec\.ts$/.test(f));
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) =>
+    /\.spec\.ts$/.test(f),
+  );
 }
 
-export async function runSubsystemGate(paths: AidlcPaths, config: AidlcConfig, echo = false): Promise<GateResult> {
+export async function runSubsystemGate(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  echo = false,
+): Promise<GateResult> {
   const gate = config.gates.subsystem;
   const started = Date.now();
-  const fail = (summary: string, failures: GateResult['failures'], metrics?: Record<string, number>): GateResult => ({
+  const fail = (
+    summary: string,
+    failures: GateResult['failures'],
+    metrics?: Record<string, number>,
+  ): GateResult => ({
     gate: 'subsystem',
     status: 'fail',
     durationMs: Date.now() - started,
@@ -151,7 +204,12 @@ export async function runSubsystemGate(paths: AidlcPaths, config: AidlcConfig, e
     ...(metrics ? { metrics } : {}),
   });
   if (!existsSync(paths.subsystemCases)) {
-    return fail('subsystem-cases.json not found', [{ where: rel(paths.root, paths.subsystemCases), message: 'Run `npm run aidlc:parse-excel` first.' }]);
+    return fail('subsystem-cases.json not found', [
+      {
+        where: rel(paths.root, paths.subsystemCases),
+        message: 'Run `npm run aidlc:parse-excel` first.',
+      },
+    ]);
   }
   const cases = JSON.parse(readFileSync(paths.subsystemCases, 'utf8')) as SubsystemCaseFile;
   // Expected values come from humans. Any drift from the snapshot is tampering, not a fix.
@@ -159,14 +217,26 @@ export async function runSubsystemGate(paths: AidlcPaths, config: AidlcConfig, e
   const actualHash = hashCases(cases.cases);
   if (actualHash !== cases.casesSha256 || (snapshotHash && snapshotHash !== actualHash)) {
     return fail('Expected values were modified', [
-      { where: rel(paths.root, paths.subsystemCases), message: 'subsystem-cases.json differs from the Excel snapshot. Never edit expected values; regenerate with `npm run aidlc:parse-excel`.' },
+      {
+        where: rel(paths.root, paths.subsystemCases),
+        message:
+          'subsystem-cases.json differs from the Excel snapshot. Never edit expected values; regenerate with `npm run aidlc:parse-excel`.',
+      },
     ]);
   }
   const specDir = path.join(paths.outputs.generatedTests, 'subsystem');
   if (listSpecs(specDir).length === 0) {
-    return fail('No generated subsystem tests', [
-      { where: rel(paths.root, specDir), message: 'Generate Playwright tests (`*.spec.ts`) for every case, titled with `[<case ID>]` (skill 03-excel-subsystem-gate).' },
-    ], { cases: cases.cases.length, passed: 0, passRate: 0 });
+    return fail(
+      'No generated subsystem tests',
+      [
+        {
+          where: rel(paths.root, specDir),
+          message:
+            'Generate Playwright tests (`*.spec.ts`) for every case, titled with `[<case ID>]` (skill 03-excel-subsystem-gate).',
+        },
+      ],
+      { cases: cases.cases.length, passed: 0, passRate: 0 },
+    );
   }
   const reportFile = path.join(paths.root, gate.reportFile);
   rmSync(reportFile, { force: true });
@@ -196,7 +266,8 @@ export async function runSubsystemGate(paths: AidlcPaths, config: AidlcConfig, e
   for (const c of cases.cases) {
     const tests = byCase.get(c.id) ?? [];
     if (tests.length === 0) {
-      if (gate.requireAllCasesCovered) failures.push({ where: c.id, message: `No test titled with [${c.id}] (${c.title})` });
+      if (gate.requireAllCasesCovered)
+        failures.push({ where: c.id, message: `No test titled with [${c.id}] (${c.title})` });
       continue;
     }
     const bad = tests.filter((t) => t.status !== 'passed');
@@ -204,14 +275,29 @@ export async function runSubsystemGate(paths: AidlcPaths, config: AidlcConfig, e
       passedCases++;
     } else {
       for (const t of bad) {
-        failures.push({ where: `${c.id} ${t.title}`, message: t.status === 'skipped' ? 'Skipped tests do not count — implement it.' : (t.error ?? t.status) });
+        failures.push({
+          where: `${c.id} ${t.title}`,
+          message:
+            t.status === 'skipped'
+              ? 'Skipped tests do not count — implement it.'
+              : (t.error ?? t.status),
+        });
       }
     }
   }
   const unknown = [...byCase.keys()].filter((id) => !cases.cases.some((c) => c.id === id));
-  for (const id of unknown) failures.push({ where: id, message: 'Test refers to a case ID that is not in the Excel specification.' });
+  for (const id of unknown)
+    failures.push({
+      where: id,
+      message: 'Test refers to a case ID that is not in the Excel specification.',
+    });
   const passRate = cases.cases.length ? passedCases / cases.cases.length : 0;
-  const metrics = { cases: cases.cases.length, passed: passedCases, passRate, tests: results.length };
+  const metrics = {
+    cases: cases.cases.length,
+    passed: passedCases,
+    passRate,
+    tests: results.length,
+  };
   const pass = failures.length === 0 && passRate >= gate.minPassRate;
   return {
     gate: 'subsystem',
@@ -225,7 +311,11 @@ export async function runSubsystemGate(paths: AidlcPaths, config: AidlcConfig, e
 }
 
 /** Runs the gates in order; a failing gate turns the remaining gates into `skipped`. */
-export async function runGates(paths: AidlcPaths, config: AidlcConfig, options: GateRunOptions = {}): Promise<GateResult[]> {
+export async function runGates(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  options: GateRunOptions = {},
+): Promise<GateResult[]> {
   const selected = options.only?.length ? options.only : GATE_ORDER;
   const results: GateResult[] = [];
   let blocked: GateName | undefined;
@@ -240,7 +330,9 @@ export async function runGates(paths: AidlcPaths, config: AidlcConfig, options: 
       result = inputsGate(paths);
     } else if (name === 'boundary') {
       const baseline = options.baseline ?? readBaseline(paths)?.sha ?? config.project.baseRef;
-      result = (await runBoundaryGuard(paths, { baseline, revert: options.revertViolations ?? false })).gate;
+      result = (
+        await runBoundaryGuard(paths, { baseline, revert: options.revertViolations ?? false })
+      ).gate;
     } else if (options.dryRun) {
       result = skipped(name, 'Skipped: dry-run');
     } else if (name !== 'subsystem' && !config.gates[name].enabled) {
@@ -285,7 +377,8 @@ async function main(): Promise<number> {
   const config = loadConfig(paths.config);
   const only = values.only?.split(',').map((s) => s.trim()) as GateName[] | undefined;
   const invalid = only?.filter((g) => !GATE_ORDER.includes(g));
-  if (invalid?.length) throw new Error(`Unknown gate(s): ${invalid.join(', ')}. Valid: ${GATE_ORDER.join(', ')}`);
+  if (invalid?.length)
+    throw new Error(`Unknown gate(s): ${invalid.join(', ')}. Valid: ${GATE_ORDER.join(', ')}`);
   const results = await runGates(paths, config, {
     ...(only ? { only } : {}),
     dryRun: values['dry-run'],

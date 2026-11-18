@@ -147,7 +147,9 @@ export function parseKeyValues(text: string): Record<string, string> {
 
 /** Collects `@ui-id` element references (`@save-button`). E-mail-like text is ignored. */
 export function extractUiRefs(...texts: string[]): string[] {
-  const refs = texts.flatMap((t) => [...t.matchAll(/(?<![\w.])@([a-z][a-z0-9-]*)/g)].map((m) => m[1]!));
+  const refs = texts.flatMap((t) =>
+    [...t.matchAll(/(?<![\w.])@([a-z][a-z0-9-]*)/g)].map((m) => m[1]!),
+  );
   return [...new Set(refs)];
 }
 

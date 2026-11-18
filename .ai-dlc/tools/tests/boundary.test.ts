@@ -2,7 +2,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { recordBaseline, runBoundaryGuard } from '../boundary-guard.js';
-import { BoundaryClassifier, describePolicy, evaluateChanges, loadBoundaryPolicy, parseBoundaryPolicy } from '../lib/boundary.js';
+import {
+  BoundaryClassifier,
+  describePolicy,
+  evaluateChanges,
+  loadBoundaryPolicy,
+  parseBoundaryPolicy,
+} from '../lib/boundary.js';
 import { resolvePaths } from '../lib/config.js';
 import { normalizeRenamePath } from '../lib/git.js';
 import { REPO_ROOT, commitAll, tempRepo, write } from './helpers.js';
@@ -36,8 +42,12 @@ describe('BoundaryClassifier', () => {
     const policy = loadBoundaryPolicy(path.join(REPO_ROOT, '.ai-dlc/config/boundary-policy.yaml'));
     const repo = new BoundaryClassifier(policy);
     expect(repo.classify('src/app/core/http/api-client.ts')).toBe('immutable');
-    expect(repo.classify('src/app/features/network-settings/network-settings-page.ts')).toBe('rebuildable');
-    expect(repo.classify('src/app/features/legacy-network/legacy-network-page.ts')).toBe('deletable');
+    expect(repo.classify('src/app/features/network-settings/network-settings-page.ts')).toBe(
+      'rebuildable',
+    );
+    expect(repo.classify('src/app/features/legacy-network/legacy-network-page.ts')).toBe(
+      'deletable',
+    );
     expect(repo.classify('.ai-dlc/inputs/ui-bindings/ui-bindings.yaml')).toBe('immutable');
     expect(describePolicy(policy)).toContain('**immutable**');
   });
@@ -49,7 +59,8 @@ describe('BoundaryClassifier', () => {
 
 describe('evaluateChanges', () => {
   const c = new BoundaryClassifier(POLICY);
-  const rules = (changes: Parameters<typeof evaluateChanges>[2]) => evaluateChanges(c, 'base', changes).violations.map((v) => `${v.path}:${v.rule}`);
+  const rules = (changes: Parameters<typeof evaluateChanges>[2]) =>
+    evaluateChanges(c, 'base', changes).violations.map((v) => `${v.path}:${v.rule}`);
 
   it('applies the zone rules', () => {
     expect(
@@ -61,16 +72,26 @@ describe('evaluateChanges', () => {
         { path: 'docs/x.md', status: 'modified', added: 1, deleted: 1 },
         { path: 'README.md', status: 'added' },
       ]),
-    ).toEqual(['src/app/core/a.ts:immutable-changed', 'docs/x.md:out-of-scope', 'README.md:unclassified']);
+    ).toEqual([
+      'src/app/core/a.ts:immutable-changed',
+      'docs/x.md:out-of-scope',
+      'README.md:unclassified',
+    ]);
   });
 
   it('treats extensible files as append-only', () => {
-    expect(rules([{ path: 'src/app/app.routes.ts', status: 'modified', added: 2, deleted: 1 }])).toEqual(['src/app/app.routes.ts:extensible-lines-removed']);
-    expect(rules([{ path: 'src/app/app.routes.ts', status: 'deleted' }])).toEqual(['src/app/app.routes.ts:extensible-file-removed']);
+    expect(
+      rules([{ path: 'src/app/app.routes.ts', status: 'modified', added: 2, deleted: 1 }]),
+    ).toEqual(['src/app/app.routes.ts:extensible-lines-removed']);
+    expect(rules([{ path: 'src/app/app.routes.ts', status: 'deleted' }])).toEqual([
+      'src/app/app.routes.ts:extensible-file-removed',
+    ]);
   });
 
   it('detects moving a file out of the immutable zone', () => {
-    expect(rules([{ path: 'src/app/features/new/a.ts', from: 'src/app/core/a.ts', status: 'renamed' }])).toEqual(['src/app/features/new/a.ts:immutable-changed']);
+    expect(
+      rules([{ path: 'src/app/features/new/a.ts', from: 'src/app/core/a.ts', status: 'renamed' }]),
+    ).toEqual(['src/app/features/new/a.ts:immutable-changed']);
   });
 
   it('collects per-zone statistics', () => {
@@ -98,7 +119,11 @@ describe('runBoundaryGuard (git)', () => {
     const repo = tempRepo();
     cleanup = repo.cleanup;
     const { dir } = repo;
-    write(dir, '.ai-dlc/config/boundary-policy.yaml', readFileSync(path.join(REPO_ROOT, '.ai-dlc/config/boundary-policy.yaml'), 'utf8'));
+    write(
+      dir,
+      '.ai-dlc/config/boundary-policy.yaml',
+      readFileSync(path.join(REPO_ROOT, '.ai-dlc/config/boundary-policy.yaml'), 'utf8'),
+    );
     write(dir, 'src/app/core/http/api-client.ts', 'export const a = 1;\n');
     write(dir, 'src/app/app.routes.ts', 'export const routes = [\n  { path: "" },\n];\n');
     write(dir, '.gitignore', '/.ai-dlc/outputs/\n');
@@ -107,21 +132,33 @@ describe('runBoundaryGuard (git)', () => {
     const baseline = await recordBaseline(paths);
 
     write(dir, 'src/app/core/http/api-client.ts', 'export const a = 2;\n'); // immutable edit
-    write(dir, 'src/app/app.routes.ts', 'export const routes = [\n  { path: "" },\n  { path: "new" },\n];\n'); // append: ok
+    write(
+      dir,
+      'src/app/app.routes.ts',
+      'export const routes = [\n  { path: "" },\n  { path: "new" },\n];\n',
+    ); // append: ok
     write(dir, 'src/app/features/network-settings/p.ts', 'export {};\n'); // rebuildable: ok
     write(dir, 'src/app/core/new-file.ts', 'export {};\n'); // immutable add
 
     const first = await runBoundaryGuard(paths, { baseline: baseline.sha, revert: false });
     expect(first.gate.status).toBe('fail');
-    expect(first.report.violations.map((v) => v.path).sort()).toEqual(['src/app/core/http/api-client.ts', 'src/app/core/new-file.ts']);
+    expect(first.report.violations.map((v) => v.path).sort()).toEqual([
+      'src/app/core/http/api-client.ts',
+      'src/app/core/new-file.ts',
+    ]);
 
     const reverted = await runBoundaryGuard(paths, { baseline: baseline.sha, revert: true });
     expect(reverted.reverted).toHaveLength(2);
-    expect(readFileSync(path.join(dir, 'src/app/core/http/api-client.ts'), 'utf8')).toBe('export const a = 1;\n');
+    expect(readFileSync(path.join(dir, 'src/app/core/http/api-client.ts'), 'utf8')).toBe(
+      'export const a = 1;\n',
+    );
     expect(existsSync(path.join(dir, 'src/app/core/new-file.ts'))).toBe(false);
 
     const after = await runBoundaryGuard(paths, { baseline: baseline.sha, revert: false });
     expect(after.gate.status).toBe('pass');
-    expect(after.report.changes.map((c) => c.path).sort()).toEqual(['src/app/app.routes.ts', 'src/app/features/network-settings/p.ts']);
+    expect(after.report.changes.map((c) => c.path).sort()).toEqual([
+      'src/app/app.routes.ts',
+      'src/app/features/network-settings/p.ts',
+    ]);
   });
 });

@@ -22,14 +22,21 @@ export function parseBuildErrors(output: string): GateFailure[] {
           break;
         }
       }
-      failures.push({ where: where || 'build', message: esbuild[1]!.replace(/\s*\[plugin [^\]]+\]\s*$/, '').trim() });
+      failures.push({
+        where: where || 'build',
+        message: esbuild[1]!.replace(/\s*\[plugin [^\]]+\]\s*$/, '').trim(),
+      });
     }
   }
   return failures;
 }
 
 /** ESLint "stylish" output: a file path line followed by `  12:5  error  message  rule`. */
-export function parseLintErrors(output: string): { failures: GateFailure[]; errors: number; warnings: number } {
+export function parseLintErrors(output: string): {
+  failures: GateFailure[];
+  errors: number;
+  warnings: number;
+} {
   const lines = stripAnsi(output).split(/\r?\n/);
   const failures: GateFailure[] = [];
   let file = '';
@@ -41,7 +48,10 @@ export function parseLintErrors(output: string): { failures: GateFailure[]; erro
       if (entry[3] === 'error') {
         errors++;
         if (failures.length < MAX_FAILURES) {
-          failures.push({ where: `${file}:${entry[1]}:${entry[2]}`, message: `${entry[4]} (${entry[5]})` });
+          failures.push({
+            where: `${file}:${entry[1]}:${entry[2]}`,
+            message: `${entry[4]} (${entry[5]})`,
+          });
         }
       } else {
         warnings++;
@@ -95,7 +105,12 @@ export function parseCoverageSummary(json: string): CoverageSummary {
     const v = total[k]?.pct;
     return typeof v === 'number' ? v : 100; // "Unknown" when there is nothing to cover
   };
-  return { statements: pct('statements'), branches: pct('branches'), functions: pct('functions'), lines: pct('lines') };
+  return {
+    statements: pct('statements'),
+    branches: pct('branches'),
+    functions: pct('functions'),
+    lines: pct('lines'),
+  };
 }
 
 /** Result of one Playwright test, flattened from the JSON reporter. */
@@ -112,7 +127,11 @@ interface PwSuite {
   specs?: {
     title: string;
     file?: string;
-    tests?: { status?: string; annotations?: { type: string }[]; results?: { status?: string; error?: { message?: string } }[] }[];
+    tests?: {
+      status?: string;
+      annotations?: { type: string }[];
+      results?: { status?: string; error?: { message?: string } }[];
+    }[];
   }[];
   suites?: PwSuite[];
 }
