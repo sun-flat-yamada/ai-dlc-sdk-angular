@@ -90,6 +90,15 @@ describe('calculateQcd', () => {
     expect(r.delivery.reductionRate).toBeCloseTo(46 / 48);
   });
 
+  it('does not report reductions for dry-runs or runs that did not pass', () => {
+    for (const r of [calculateQcd({ ...run, dryRun: true }, human, config), calculateQcd({ ...run, result: 'exhausted' }, human, config)]) {
+      expect(r.comparable).toBe(false);
+      expect(r.cost.reductionRate).toBeNull();
+      expect(r.delivery.reductionRate).toBeNull();
+      expect(renderQcdMarkdown(r, 'ja')).toContain('削減率は算出していません');
+    }
+  });
+
   it('renders Japanese and English reports', () => {
     const r = calculateQcd(run, human, config);
     const ja = renderQcdMarkdown(r, 'ja');

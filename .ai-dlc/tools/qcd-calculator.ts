@@ -49,6 +49,8 @@ type Num = number | null;
 export interface QcdResult {
   runId: string;
   dryRun: boolean;
+  /** False for dry-runs and runs that did not pass the final gate: reductions are then not reported. */
+  comparable: boolean;
   generatedAt: string;
   currency: string;
   quality: {
@@ -135,11 +137,14 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
   const humanCost = humanHours * hourlyRate;
   const aiTotal = aiCost + aiHumanCost;
 
+  // Reductions are only meaningful for a real run that passed the final gate.
+  const comparable = !run.dryRun && run.result === 'passed';
   const end = run.endedAt ? Date.parse(run.endedAt) : Date.now();
   const leadTimeHours = (end - Date.parse(run.startedAt)) / 3_600_000;
   return {
     runId: run.runId,
     dryRun: run.dryRun,
+    comparable,
     generatedAt: new Date().toISOString(),
     currency: human.cost.currency ?? config.qcd.currency,
     quality: {
@@ -181,7 +186,7 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
         totalCost: round(aiTotal),
       },
       human: { effortHours: humanHours, hourlyRate, totalCost: round(humanCost), breakdown: human.cost.effortHours },
-      reductionRate: rate(aiTotal, humanCost),
+      reductionRate: comparable ? rate(aiTotal, humanCost) : null,
     },
     delivery: {
       ai: {
@@ -191,7 +196,7 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
         result: run.result,
       },
       human: { leadTimeHours: human.delivery.leadTimeHours, calendarDays: human.delivery.calendarDays ?? null },
-      reductionRate: rate(leadTimeHours, human.delivery.leadTimeHours),
+      reductionRate: comparable ? rate(leadTimeHours, human.delivery.leadTimeHours) : null,
     },
   };
 }
@@ -200,6 +205,7 @@ const L = {
   ja: {
     title: 'QCD 比較レポート（AI-DLC vs 人間開発）',
     dry: '> ⚠ dry-run の結果です。Copilot CLI は呼び出されておらず、数値はハーネスの動作確認用です。',
+    notComparable: '> ⚠ 最終品質ゲートを通過していないため、削減率は算出していません（N/A）。',
     item: '指標',
     ai: 'AI-DLC',
     human: '人間開発',
@@ -240,6 +246,7 @@ const L = {
   en: {
     title: 'QCD comparison report (AI-DLC vs human development)',
     dry: '> ⚠ Dry-run result. Copilot CLI was not called; the numbers only validate the harness.',
+    notComparable: '> ⚠ The final quality gate was not passed, so reductions are not calculated (N/A).',
     item: 'Metric',
     ai: 'AI-DLC',
     human: 'Human',
@@ -295,6 +302,7 @@ export function renderQcdMarkdown(r: QcdResult, language: 'ja' | 'en'): string {
     '',
     `- Run: \`${r.runId}\` / ${r.generatedAt}`,
     r.dryRun ? `\n${t.dry}` : '',
+    r.comparable ? '' : `\n${t.notComparable}`,
     '',
     `## ${t.q}`,
     '',

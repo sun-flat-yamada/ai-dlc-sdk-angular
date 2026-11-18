@@ -16,6 +16,9 @@ zones:
       - src/app/shared/ui/**
       - src/styles/base-panel.scss
       - src/main.ts
+      - src/app/app.ts
+      - src/app/app.spec.ts
+      - src/styles.scss
       - src/index.html
       - angular.json
       - tsconfig*.json
