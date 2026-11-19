@@ -2,15 +2,23 @@
 
 ## 1. Install into your repository
 
+The installer is the one harness command that runs on the host: it only copies files, executes no
+project code, and is how the sandbox gets into your repository. Install the SDK's own dependencies
+without running their install scripts:
+
 ```bash
 git clone https://github.com/sun-flat-yamada/ai-dlc-sdk-angular.git
-cd ai-dlc-sdk-angular && npm ci
+cd ai-dlc-sdk-angular && npm ci --ignore-scripts
 npm run aidlc:install -- --target ../your-panel-app --dry-run
 npm run aidlc:install -- --target ../your-panel-app          # add --with-sample to copy the sample inputs
-cd ../your-panel-app && npm install && npx playwright install chromium
+cd ../your-panel-app && npm run sandbox -- up                # builds the sandbox, runs npm ci inside it
 ```
 
-The installer never overwrites existing files without `--force` and never touches `src/`.
+The installer copies the sandbox (`.devcontainer/`, `scripts/sandbox.ts`) together with the harness,
+never overwrites existing files without `--force` and never touches `src/`. From here on every command
+runs in the target's sandbox: `npm run sandbox -- shell`, or **Reopen in Container** in VS Code.
+If your project needs extra hosts (private npm registry, internal APIs) add them to
+`.devcontainer/allowed-domains.txt` — see [sandbox.md](sandbox.md).
 
 ## 2. Describe your code base (once)
 
@@ -30,7 +38,7 @@ Put requirements, design HTML/CSS (with `data-ui-id`), OpenAPI (with `operationI
 the Excel test specification and `human-qcd.json` into `.ai-dlc/inputs/`. Iterate on
 `npm run aidlc:validate-inputs` until it reports 0 errors and review `binding-matrix.md` with the team.
 
-## 4. Run
+## 4. Run (inside the sandbox)
 
 ```bash
 npm run aidlc:run -- --max-iterations 3 --dry-run   # rehearsal: prompts, Gate 0/1, reports
@@ -45,7 +53,7 @@ Review in this order: `final-quality-gate.md` → `unresolved-issues.md` (if any
 
 - [ ] Same requirement already developed by humans, with effort, lead time and defect records (`human-qcd.json`).
 - [ ] Inputs frozen before the run (they are the controlled variable).
-- [ ] Runner without production credentials; Copilot policy allows the documents you send.
+- [ ] Runs only in the sandbox (`npm run aidlc:sandbox-check` is OK); Copilot policy allows the documents you send.
 - [ ] Record the human time spent on input preparation and review in `qcd.aiDlcHumanHours`.
 - [ ] Repeat with 2-3 requirements before drawing conclusions (one run is an anecdote).
 
@@ -53,6 +61,10 @@ Review in this order: `final-quality-gate.md` → `unresolved-issues.md` (if any
 
 | Symptom | Fix |
 | --- | --- |
+| `… must run inside the AI-DLC sandbox` | Run the command in the sandbox: `npm run sandbox -- exec <command>` or a sandbox shell. See [sandbox.md](sandbox.md). |
+| `egress firewall is stale / missing` | Restart the container (`npm run sandbox -- down && npm run sandbox -- up`) and read `/run/aidlc-sandbox/firewall.log`. |
+| `git credential helper bridged to the host` | VS Code forwarded your git credentials. Set `dev.containers.gitCredentialHelperConfigLocation` to `none` and rebuild, or use `npm run sandbox`. |
+| `npm ci` / Copilot cannot reach a host in the sandbox | Add the host to `.devcontainer/allowed-domains.txt` (or `AIDLC_FIREWALL_EXTRA_DOMAINS`) and restart. |
 | `Working tree has N uncommitted change(s)` | Commit / stash, or `--allow-dirty` (pre-existing changes then count as changes of the run). |
 | Gate 1 keeps reverting the same file | The policy and the requirement conflict: allow the change explicitly (zone) or change the requirement. |
 | Gate 4: `No test titled with [ID]` | The test title must contain `[<case ID>]`. |

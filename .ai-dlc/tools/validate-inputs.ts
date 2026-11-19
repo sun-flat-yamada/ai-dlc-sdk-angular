@@ -11,8 +11,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-import { AidlcPaths, findRepoRoot, resolvePaths } from './lib/config.js';
+import { AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
+import { enforceSandbox } from './lib/sandbox.js';
 import { SubsystemCaseFile } from './lib/subsystem-cases.js';
 import { GateResult } from './lib/telemetry.js';
 import {
@@ -456,6 +457,7 @@ export function inputsGate(paths: AidlcPaths): GateResult {
 async function main(): Promise<number> {
   const root = findRepoRoot();
   const paths = resolvePaths(root);
+  await enforceSandbox(loadConfig(paths.config), 'aidlc:validate-inputs', 'tool');
   const { findings, bindings, operations } = validateInputs(paths);
   for (const f of findings)
     (f.level === 'error' ? log.warn : log.info)(

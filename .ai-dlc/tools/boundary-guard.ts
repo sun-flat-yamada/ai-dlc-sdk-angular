@@ -19,6 +19,7 @@ import {
 import { AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { Git } from './lib/git.js';
 import { isMain, log, runCli } from './lib/cli.js';
+import { enforceSandbox } from './lib/sandbox.js';
 import { GateResult, writeJsonAtomic } from './lib/telemetry.js';
 
 export interface BaselineSnapshot {
@@ -108,6 +109,7 @@ async function main(): Promise<number> {
   const root = findRepoRoot();
   const paths = resolvePaths(root);
   const config = loadConfig(paths.config);
+  await enforceSandbox(config, 'aidlc:guard', 'tool');
   if (values.snapshot) {
     const snap = await recordBaseline(paths, values.baseline ?? 'HEAD');
     log.info(`Baseline recorded: ${snap.ref} (${snap.sha.slice(0, 12)})`);

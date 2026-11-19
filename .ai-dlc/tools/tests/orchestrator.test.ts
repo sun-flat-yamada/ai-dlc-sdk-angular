@@ -40,6 +40,26 @@ describe('runFullLoop (dry-run)', () => {
   let cleanup = () => {};
   afterEach(() => cleanup());
 
+  it('never reverts uncommitted developer changes in a dry-run', async () => {
+    const env = await prepare();
+    cleanup = env.cleanup;
+    write(env.dir, '.ai-dlc/tools/new-tool.ts', 'export const work = 1;\n');
+    write(env.dir, 'src/app/core/http/api-client.ts', '// edited by a developer\n');
+    const run = await runFullLoop(env.paths, env.config, {
+      mode: 'full-loop',
+      maxIterations: 1,
+      dryRun: true,
+      skipPost: true,
+      allowDirty: false,
+      revert: true,
+    });
+    expect(run.iterations[0]!.gates.find((g) => g.gate === 'boundary')?.status).toBe('fail');
+    expect(existsSync(path.join(env.dir, '.ai-dlc/tools/new-tool.ts'))).toBe(true);
+    expect(readFileSync(path.join(env.dir, 'src/app/core/http/api-client.ts'), 'utf8')).toBe(
+      '// edited by a developer\n',
+    );
+  });
+
   it('runs N iterations, writes reports and telemetry when no gate can pass', async () => {
     const env = await prepare();
     cleanup = env.cleanup;

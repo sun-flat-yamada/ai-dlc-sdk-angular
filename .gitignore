@@ -51,6 +51,9 @@ id_ed25519*
 credentials.json
 secrets.*
 .npmrc
+# Extra CA certificates for the sandbox image (local only)
+/.devcontainer/certs/*
+!/.devcontainer/certs/README.md
 
 # =================================================================
 # Editors & OS

@@ -5,16 +5,19 @@ Thank you for improving **ai-dlc-sdk-angular**. Human and AI contributors follow
 
 ## Setup
 
+All work happens in the bundled sandbox ([docs/sandbox.md](docs/sandbox.md)); `npm run gate` and every
+`aidlc:*` command refuse to run on the host.
+
 ```bash
 git clone https://github.com/sun-flat-yamada/ai-dlc-sdk-angular.git
 cd ai-dlc-sdk-angular
-npm ci
-npx playwright install chromium
-npm run gate
+npm run sandbox -- up        # builds the image, applies the egress firewall, runs npm ci inside
+npm run sandbox -- shell     # or: VS Code "Reopen in Container"
+npm run gate                 # inside the sandbox
 ```
 
-Requirements: Node.js 22.22+, 24.15+ or 26+ (see `.nvmrc`), npm 11, Git. GitHub Copilot CLI is only needed
-for real (non dry-run) loops.
+Host requirements: Docker, Node.js 22.22+, 24.15+ or 26+ (only to start the launcher) and Git. Everything
+else — Node.js for the build, Angular CLI, Playwright Chromium, GitHub Copilot CLI — is in the sandbox image.
 
 ## Workflow
 

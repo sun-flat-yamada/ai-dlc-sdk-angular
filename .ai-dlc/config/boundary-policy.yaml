@@ -31,6 +31,9 @@ zones:
       - .ai-dlc/tools/**
       - .ai-dlc/references/**
       - .github/**
+      # The sandbox the agent runs in (container definition, egress firewall, launcher)
+      - .devcontainer/**
+      - scripts/sandbox.ts
       - AGENTS.md
       - CLAUDE.md
 

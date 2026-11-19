@@ -57,9 +57,10 @@ const RULES: Rule[] = [
     description: 'Personal e-mail address (use example.invalid)',
   },
   {
+    // Allowed: CI runner, generic `user`, and `node` (the sandbox user of the dev container image).
     id: 'user-home-path',
     pattern:
-      /\b[A-Za-z]:\\Users\\(?!Public\\|Default\\|<)[^\\\s"'`]+\\|\/home\/(?!runner\/|user\/|<)[a-z0-9._-]+\/|\/Users\/(?!Shared\/|<)[A-Za-z0-9._-]+\//,
+      /\b[A-Za-z]:\\Users\\(?!Public\\|Default\\|<)[^\\\s"'`]+\\|\/home\/(?!runner\/|user\/|node\/|<)[a-z0-9._-]+\/|\/Users\/(?!Shared\/|<)[A-Za-z0-9._-]+\//,
     description: 'Absolute user home path',
   },
 ];

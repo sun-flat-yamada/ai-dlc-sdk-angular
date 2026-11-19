@@ -181,6 +181,8 @@ describe('install', () => {
     expect(scripts['aidlc:run']).toBe('custom');
     expect(scripts['aidlc:gate']).toContain('gate-runner.ts');
     expect(scripts['aidlc:install']).toBeUndefined();
+    expect(scripts['sandbox']).toBe('node scripts/sandbox.ts');
+    expect(scripts['aidlc:sandbox-check']).toContain('sandbox-check.ts');
     const dev = merged['devDependencies'] as Record<string, string>;
     expect(dev['tsx']).toBe('^1.0.0');
     expect(dev['exceljs']).toBeDefined();
@@ -199,6 +201,13 @@ describe('install', () => {
     ).toBe('skip');
     expect(plan.some((a) => a.target.startsWith('.ai-dlc/tools/tests/'))).toBe(false);
     expect(plan.some((a) => a.target.includes('ui-bindings.yaml'))).toBe(false);
+    expect(plan.find((a) => a.target === '.devcontainer/devcontainer.json')?.kind).toBe('copy');
+    expect(plan.find((a) => a.target === 'scripts/sandbox.ts')?.kind).toBe('copy');
+    expect(
+      plan.some(
+        (a) => a.target.startsWith('.devcontainer/certs/') && !a.target.endsWith('README.md'),
+      ),
+    ).toBe(false);
 
     runInstall(REPO_ROOT, repo.dir, { withSample: false, force: false, dryRun: false });
     expect(
@@ -212,6 +221,7 @@ describe('install', () => {
     expect(readFileSync(path.join(repo.dir, '.gitignore'), 'utf8')).toContain(
       '/.ai-dlc/outputs/**',
     );
+    expect(existsSync(path.join(repo.dir, '.devcontainer/init-firewall.sh'))).toBe(true);
   });
 
   it('refuses a target without angular.json', () => {

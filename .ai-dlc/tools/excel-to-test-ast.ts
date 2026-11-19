@@ -13,6 +13,7 @@ import { parseArgs } from 'node:util';
 import ExcelJS from 'exceljs';
 import { AidlcConfig, AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
+import { enforceSandbox } from './lib/sandbox.js';
 import {
   SubsystemCase,
   SubsystemCaseFile,
@@ -310,6 +311,7 @@ async function main(): Promise<number> {
   const root = findRepoRoot();
   const paths = resolvePaths(root);
   const config = loadConfig(paths.config);
+  await enforceSandbox(config, 'aidlc:parse-excel', 'tool');
   const inputs = values.input?.map((f) => path.resolve(f));
   const file = await convertWorkbooks(paths, config, inputs);
   log.info(
