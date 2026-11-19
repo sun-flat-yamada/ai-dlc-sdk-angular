@@ -83,6 +83,9 @@ Expression vocabulary (for the implementer, not evaluated by the harness): `stat
 | Operation not bound anywhere (mark shared ones with `x-ui-binding: shared`) | warning |
 | Requirement IDs not found in `requirements/` | warning |
 | Excel `@ui-id` references that do not exist | error |
+| Excel API responses / expected requests that match no OpenAPI operation (under the `servers` base path); expected request properties missing from the request schema | error |
+| Excel API response status not declared for the operation | warning |
+| Excel case without a requirement ID; requirement ID of a case not found in `requirements/`; screen requirement (`requirements:` in `ui-bindings.yaml`) not verified by any case | warning |
 
 ## Design HTML
 
@@ -106,7 +109,12 @@ Expression vocabulary (for the implementer, not evaluated by the harness): `stat
 | Expected UI / 期待画面表示 | Free text with `@ui-id` |
 | Expected CSS / 期待CSS状態 | `@ui-id { property: computed-value }` |
 | Expected API request / 期待APIリクエスト | `PUT /api/v1/x {json subset}` |
-| Notes / 備考 | Requirement IDs (`REQ-…`) for traceability |
+| Requirement ID / 要件ID | Requirement IDs this case verifies, comma- or line-separated (`REQ-NET-006`) |
+| Notes / 備考 | Free text. Without a requirement ID column, `REQ-…` IDs written here are used instead |
+
+The cases are used during development, not only as the final gate: skill 01 traces requirement → case →
+file in the change impact map, skill 03 writes the Playwright tests before skill 02 implements, and the
+unit tests name the case IDs they cover.
 
 Other header names can be added in `aidlc.config.yaml` → `excel.headerAliases`.
 

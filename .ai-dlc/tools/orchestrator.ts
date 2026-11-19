@@ -422,7 +422,7 @@ export async function runFullLoop(
         await callCopilot(paths, config, {
           id: i === 1 ? 'implement' : 'fix',
           phase: i === 1 ? 'implement' : 'fix',
-          skills: i === 1 ? [SKILLS.context, SKILLS.implement, SKILLS.gate] : [SKILLS.fix],
+          skills: i === 1 ? [SKILLS.context, SKILLS.gate, SKILLS.implement] : [SKILLS.fix],
           prompt: i === 1 ? buildImplementPrompt(ctx) : buildFixPrompt(ctx, previous),
           workDir: iterDir,
           dryRun: options.dryRun,

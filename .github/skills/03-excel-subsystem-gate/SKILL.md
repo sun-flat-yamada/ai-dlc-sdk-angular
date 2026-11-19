@@ -1,14 +1,19 @@
 ---
 name: 03-excel-subsystem-gate
-description: Turn the human-written Excel subsystem test specification (converted to subsystem-cases.json) into Playwright tests that form the AI-DLC final quality gate. Use after the screens are implemented, and whenever a subsystem case has no passing test.
+description: Turn the human-written Excel subsystem test specification (converted to subsystem-cases.json) into Playwright tests that drive the implementation (test-first) and form the AI-DLC final quality gate. Use before the screens are implemented, and whenever a subsystem case has no test.
 ---
 
 # 03 — Excel subsystem tests as the final quality gate
 
 ## Role
 
-Write one automated Playwright test per Excel case. The cases are the acceptance criteria written by
-humans; your tests must check exactly what they say — no more lenient, no stricter.
+Write one automated Playwright test per Excel case **before the screens are implemented** (test-first).
+The cases are the acceptance criteria written by humans; your tests must check exactly what they say —
+no more lenient, no stricter. The implementation step (skill 02) then works until these tests pass, and
+the harness runs them again as the final quality gate (Gate 4).
+
+Write the tests from the cases, `ui-bindings.yaml` (routes, ui-ids) and the change impact map only — not from
+the implementation. A test that fails because the screen does not exist yet is expected at this point.
 
 ## Inputs
 
@@ -58,6 +63,9 @@ Rules:
 ```bash
 npx playwright test --config .ai-dlc/tools/playwright.subsystem.config.ts
 ```
+
+Before the implementation exists, only check that every case is collected (add `--list`); run them for
+real at the end of skill 02.
 
 The harness (Gate 4) passes only when **every** case ID has a passing test, no test is skipped and
 `subsystem-cases.json` still matches the Excel snapshot.

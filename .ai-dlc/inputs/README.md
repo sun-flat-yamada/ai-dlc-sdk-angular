@@ -24,7 +24,8 @@ stable IDs on both sides (`data-ui-id`, `operationId`), so the harness can check
 ## Checklist before `npm run aidlc:run`
 
 1. `npm run aidlc:validate-inputs` reports **0 errors** (warnings are worth reading).
-2. Every requirement ID is referenced by a screen (`requirements:`) or an Excel case (`備考` / notes).
+2. Every requirement ID is referenced by a screen (`requirements:`); every screen requirement is verified by an
+   Excel case (`要件ID` column, or `REQ-…` in `備考` / notes).
 3. Every Excel case has steps, at least one expected result (UI / CSS / API) and the mocked API responses it needs.
 4. `.ai-dlc/outputs/reports/binding-matrix.md` reads correctly to a reviewer.
 
@@ -32,7 +33,7 @@ stable IDs on both sides (`data-ui-id`, `operationId`), so the harness can check
 
 The parser finds the header row automatically (first 15 rows) and accepts English or Japanese headers
 (`テストID`, `大項目`, `テスト項目`, `優先度`, `前提条件`, `機器初期状態`, `API応答(モック)`, `操作手順`,
-`期待画面表示`, `期待CSS状態`, `期待APIリクエスト`, `備考`). Add other names in
+`期待画面表示`, `期待CSS状態`, `期待APIリクエスト`, `要件ID`, `備考`). Add other names in
 `aidlc.config.yaml` → `excel.headerAliases`.
 
 | Column | Notation |
@@ -41,5 +42,6 @@ The parser finds the header row automatically (first 15 rows) and accepts Englis
 | 期待APIリクエスト | `PUT /api/v1/network/ipv4 {"address":"192.168.0.20"}` — the JSON is a subset match |
 | 期待CSS状態 | `@status-message { color: rgb(255, 176, 32) }` — computed style of a `data-ui-id` element |
 | 操作手順 / 期待画面表示 | Free text; refer to elements as `@ui-id` |
+| 要件ID | Requirement IDs the case verifies (`REQ-NET-006`, comma- or line-separated) |
 
 Regenerate the sample workbook with `npm run aidlc:sample-excel`.

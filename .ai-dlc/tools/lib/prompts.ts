@@ -74,9 +74,10 @@ ${bullet(listFiles(root, paths.inputs.uiBindings))}
 - Generated matrix (element × event × API × state): \`${rel(root, path.join(paths.outputs.reports, 'binding-matrix.md'))}\`
 - Every bound element carries \`data-ui-id="<ui-id>"\` in the Angular template, exactly as in the design HTML.
 
-### Subsystem test specification
+### Subsystem test specification (acceptance criteria — use while designing and implementing)
 - Source workbooks: ${bullet(listFiles(root, paths.inputs.subsystemTests)).replace(/\n/g, ' ')}
 - Structured cases (generated, read-only): \`${rel(root, paths.subsystemCases)}\`
+- Readable list with every step and expectation: \`${rel(root, path.join(paths.outputs.generatedTests, 'subsystem-cases.md'))}\`
 
 ### References (existing code base knowledge)
 ${bullet(listFiles(root, paths.references))}`;
@@ -89,11 +90,13 @@ export function buildImplementPrompt(ctx: PromptContext): string {
 You are the implementation agent of an AI-driven development life cycle for the Angular application \`${config.project.angularProject}\`, an embedded device front-panel GUI.
 Work autonomously. Nobody will answer questions during this run.
 
-## Skills to apply, in order
+## Skills to apply, in order (test-first)
 
-1. ${skillRef(paths, SKILLS.context)} — map what to reuse, rebuild and delete. Write the change impact map to \`.ai-dlc/outputs/reports/change-impact-map.md\`.
-2. ${skillRef(paths, SKILLS.implement)} — implement the screens, services and unit tests from the inputs.
-3. ${skillRef(paths, SKILLS.gate)} — write one Playwright test per subsystem case (${ctx.caseCount} case(s)) under \`.ai-dlc/outputs/generated-tests/subsystem/\`.
+The Excel subsystem cases (${ctx.caseCount} case(s)) are the human-written acceptance criteria. They drive every step, not only the final gate.
+
+1. ${skillRef(paths, SKILLS.context)} — map requirements, Excel cases and what to reuse, rebuild and delete. Write the change impact map to \`.ai-dlc/outputs/reports/change-impact-map.md\`.
+2. ${skillRef(paths, SKILLS.gate)} — **before implementing**, write one Playwright test per subsystem case under \`.ai-dlc/outputs/generated-tests/subsystem/\`. They are expected to fail until step 3 is done.
+3. ${skillRef(paths, SKILLS.implement)} — implement the screens, services and unit tests so that the inputs are met and the tests of step 2 pass. Run the subsystem tests at the end.
 
 Read each SKILL.md completely before starting that step.
 

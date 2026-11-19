@@ -13,6 +13,7 @@ import {
   parseApiRequests,
   parseCss,
   parseKeyValues,
+  parseRequirementIds,
   splitLines,
 } from '../lib/subsystem-cases.js';
 import { SAMPLE_ROWS, buildSampleWorkbook } from '../samples/generate-sample-excel.js';
@@ -64,6 +65,19 @@ describe('cell parsers', () => {
     ).toEqual(['save-button', 'ip-address']);
   });
 
+  it('parses requirement IDs from the column, or from the notes as a fallback', () => {
+    expect(parseRequirementIds('REQ-NET-001, REQ-NET-002\nREQ-NET-001、REQ-NET-003')).toEqual([
+      'REQ-NET-001',
+      'REQ-NET-002',
+      'REQ-NET-003',
+    ]);
+    expect(parseRequirementIds('', 'see REQ-NET-004 and REQ-NET-N01.')).toEqual([
+      'REQ-NET-004',
+      'REQ-NET-N01',
+    ]);
+    expect(parseRequirementIds('', 'no ids')).toEqual([]);
+  });
+
   it('normalizes headers and reads rich text cells', () => {
     expect(normalizeHeader(' API応答 （モック） ')).toBe('api応答(モック)');
     expect(DEFAULT_HEADER_ALIASES.mockApi.map(normalizeHeader)).toContain('api応答(モック)');
@@ -90,6 +104,12 @@ describe('parseWorkbook', () => {
       'PUT /api/v1/network/ipv4 200',
     );
     expect(c3.uiRefs).toEqual(['ip-address', 'save-button', 'status-message']);
+    expect(c3.requirements).toEqual(['REQ-NET-006']);
+    expect(result.cases.find((c) => c.id === 'ST-NET-001')!.requirements).toEqual([
+      'REQ-NET-001',
+      'REQ-NET-002',
+      'REQ-NET-003',
+    ]);
   });
 
   it('round-trips through an xlsx buffer', async () => {

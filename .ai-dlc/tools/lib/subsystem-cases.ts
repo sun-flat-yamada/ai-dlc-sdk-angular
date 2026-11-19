@@ -39,6 +39,8 @@ export interface SubsystemCase {
   category: string;
   title: string;
   priority: string;
+  /** Requirement IDs this case verifies (requirement ID column, or `REQ-…` found in the notes). */
+  requirements: string[];
   preconditions: string[];
   /** `key=value` lines of the initial device state. */
   initialDeviceState: Record<string, string>;
@@ -64,6 +66,21 @@ export interface SubsystemCaseFile {
 
 export function hashCases(cases: readonly SubsystemCase[]): string {
   return createHash('sha256').update(JSON.stringify(cases)).digest('hex');
+}
+
+const REQUIREMENT_ID = /\bREQ-[A-Z0-9][A-Z0-9-]*[A-Z0-9]\b/g;
+
+/**
+ * Requirement IDs of a case. The requirement ID column is split on commas, spaces and line breaks;
+ * when it is empty, `REQ-…` IDs written in the notes are used (older workbooks).
+ */
+export function parseRequirementIds(column: string, notes = ''): string[] {
+  const listed = column
+    .split(/[\s,、，;；/]+/u)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const ids = listed.length ? listed : [...notes.matchAll(REQUIREMENT_ID)].map((m) => m[0]);
+  return [...new Set(ids)];
 }
 
 /** Splits a multi-line cell into items, removing list markers such as `1.`, `(2)`, `①`, `・`, `-`. */

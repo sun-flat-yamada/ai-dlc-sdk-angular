@@ -20,6 +20,7 @@ import {
   hashCases,
   parseApiMocks,
   parseApiRequests,
+  parseRequirementIds,
   parseCss,
   parseKeyValues,
   parseSteps,
@@ -40,6 +41,7 @@ export type CaseField =
   | 'expectedUi'
   | 'expectedCss'
   | 'expectedApi'
+  | 'requirements'
   | 'notes';
 
 /** Built-in header names (English / Japanese). Matching ignores case, spaces and full-width forms. */
@@ -80,6 +82,16 @@ export const DEFAULT_HEADER_ALIASES: Record<CaseField, string[]> = {
     'expected api',
     '期待apiリクエスト',
     '期待api',
+  ],
+  requirements: [
+    'requirement id',
+    'requirement ids',
+    'requirements',
+    'req id',
+    '要件id',
+    '要件番号',
+    '関連要件',
+    '要件',
   ],
   notes: ['notes', 'remarks', '備考'],
 };
@@ -187,6 +199,7 @@ export function parseWorkbook(
         category,
         title: raw.title ?? '',
         priority: raw.priority ?? '',
+        requirements: parseRequirementIds(raw.requirements ?? '', raw.notes ?? ''),
         preconditions: splitLines(raw.preconditions ?? ''),
         initialDeviceState: parseKeyValues(raw.initialDeviceState ?? ''),
         mockApi: parseApiMocks(raw.mockApi ?? ''),
@@ -226,19 +239,58 @@ export function parseWorkbook(
   return result;
 }
 
+/**
+ * Readable list of the cases. It is an input of the development steps (skills 01-03), so it carries
+ * every expectation, not only counts: the implementation is built against these acceptance criteria.
+ */
 export function renderChecklist(file: SubsystemCaseFile): string {
   const lines = [
     '# Subsystem test cases (generated — do not edit)',
     '',
     `Generated: ${file.generatedAt} / cases: ${file.cases.length} / sha256: \`${file.casesSha256.slice(0, 16)}\``,
     '',
-    '| ID | Category | Title | Steps | Expected UI | Expected CSS | Expected API |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    'Acceptance criteria written by humans. Use them while designing and implementing, not only at test time.',
+    '',
+    '| ID | Category | Title | Requirements | Steps | Expected UI | Expected CSS | Expected API |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, '<br>');
   for (const c of file.cases) {
     lines.push(
-      `| ${cell(c.id)} | ${cell(c.category)} | ${cell(c.title)} | ${c.steps.length} | ${c.expectedUi.length} | ${c.expectedCss.length} | ${c.expectedApi.length} |`,
+      `| ${cell(c.id)} | ${cell(c.category)} | ${cell(c.title)} | ${cell(c.requirements.join(', ')) || '—'} | ${c.steps.length} | ${c.expectedUi.length} | ${c.expectedCss.length} | ${c.expectedApi.length} |`,
+    );
+  }
+  const list = (title: string, items: string[]) =>
+    items.length ? ['', `**${title}**`, '', ...items.map((x) => `- ${x}`)] : [];
+  for (const c of file.cases) {
+    lines.push(
+      '',
+      `## ${c.id} — ${c.title}`,
+      '',
+      `Requirements: ${c.requirements.join(', ') || '—'} / priority: ${c.priority || '—'} / source: ${c.sheet}!R${c.row}`,
+      ...list('Preconditions', c.preconditions),
+      ...list(
+        'Initial device state',
+        Object.entries(c.initialDeviceState).map(([k, v]) => `\`${k}=${v}\``),
+      ),
+      ...list(
+        'Mocked API responses',
+        c.mockApi.map((m) => `\`${m.raw}\``),
+      ),
+      ...list(
+        'Steps',
+        c.steps.map((s) => `${s.no}. ${s.action}`),
+      ),
+      ...list('Expected UI', c.expectedUi),
+      ...list(
+        'Expected CSS',
+        c.expectedCss.map((x) => `\`${x.raw}\``),
+      ),
+      ...list(
+        'Expected API requests',
+        c.expectedApi.map((x) => `\`${x.raw}\``),
+      ),
+      ...(c.notes ? ['', `Notes: ${c.notes.replace(/\n/g, ' ')}`] : []),
     );
   }
   if (file.warnings.length) {
