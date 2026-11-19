@@ -26,6 +26,7 @@ import {
 } from './lib/config.js';
 import { exec, stripAnsi, tail } from './lib/exec.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
+import { enforceSandbox } from './lib/sandbox.js';
 import {
   caseIdsInTitle,
   parseBuildErrors,
@@ -375,6 +376,7 @@ async function main(): Promise<number> {
   const root = findRepoRoot();
   const paths = resolvePaths(root);
   const config = loadConfig(paths.config);
+  await enforceSandbox(config, 'aidlc:gate', values['dry-run'] ? 'tool' : 'agent');
   const only = values.only?.split(',').map((s) => s.trim()) as GateName[] | undefined;
   const invalid = only?.filter((g) => !GATE_ORDER.includes(g));
   if (invalid?.length)

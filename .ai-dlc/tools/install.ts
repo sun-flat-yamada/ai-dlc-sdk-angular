@@ -3,9 +3,14 @@
  *
  *   npm run aidlc:install -- --target ../my-panel-app [--dry-run] [--with-sample] [--force]
  *
- * Copies .ai-dlc/{tools,config,references,inputs,outputs} skeletons and .github/skills/,
- * adds the aidlc:* npm scripts and the harness devDependencies, and appends .gitignore rules.
- * Existing files are kept unless --force is given. Run `npm install` in the target afterwards.
+ * Copies .ai-dlc/{tools,config,references,inputs,outputs} skeletons, .github/skills/ and the
+ * sandbox (.devcontainer/ + scripts/sandbox.ts), adds the aidlc:* and sandbox npm scripts and the
+ * harness devDependencies, and appends .gitignore rules. Existing files are kept unless --force
+ * is given. Then start the sandbox in the target (npm run sandbox -- up): it installs the
+ * dependencies inside the container.
+ *
+ * The installer is the only harness command that does not require the sandbox: it executes no
+ * project code and is how the sandbox gets into the target repository.
  */
 import {
   cpSync,
@@ -42,6 +47,9 @@ const GITIGNORE_BLOCK = `
 !/.ai-dlc/outputs/**/.gitkeep
 /test-results/
 /playwright-report/
+# Extra CA certificates for the AI-DLC sandbox image (local only)
+/.devcontainer/certs/*
+!/.devcontainer/certs/README.md
 `;
 
 export interface InstallAction {
@@ -83,10 +91,13 @@ export function planInstall(
     ['.ai-dlc/outputs', (r) => r === 'README.md' || r.endsWith('.gitkeep')],
     ['.ai-dlc/inputs', (r) => options.withSample || r.endsWith('README.md')],
     ['.github/skills', () => true],
+    // The sandbox: never copy local CA certificates.
+    ['.devcontainer', (r) => !r.startsWith('certs/') || r === 'certs/README.md'],
   ];
   for (const [dir, filter] of groups) {
     for (const rel of listFiles(path.join(sourceRoot, dir), filter)) copy(`${dir}/${rel}`);
   }
+  copy('scripts/sandbox.ts');
   actions.push({
     kind: 'package.json',
     target: 'package.json',
@@ -109,7 +120,7 @@ export function mergePackageJson(
   const scripts = { ...((target['scripts'] ?? {}) as Record<string, string>) };
   for (const [k, v] of Object.entries(srcScripts)) {
     if (
-      k.startsWith('aidlc:') &&
+      (k.startsWith('aidlc:') || k === 'sandbox') &&
       k !== 'aidlc:install' &&
       k !== 'aidlc:sample-excel' &&
       !(k in scripts)
@@ -140,6 +151,7 @@ export function runInstall(
     if (a.kind === 'copy') {
       const dst = path.join(targetRoot, a.target);
       mkdirSync(path.dirname(dst), { recursive: true });
+      // cpSync keeps the executable bit of the sandbox shell scripts.
       cpSync(path.join(sourceRoot, a.target), dst);
     }
   }
@@ -204,12 +216,16 @@ async function main(): Promise<number> {
     values['dry-run'] ? 'Dry-run: nothing written.' : 'Installed. Next steps in the target:',
   );
   if (!values['dry-run']) {
-    log.info('  1. npm install && npx playwright install chromium');
+    log.info('  1. npm run sandbox -- up   (Docker; builds the sandbox and runs npm ci inside)');
     log.info(
       '  2. Edit .ai-dlc/config/boundary-policy.yaml and regenerate .ai-dlc/references/ for YOUR code base',
     );
-    log.info('  3. Put the inputs into .ai-dlc/inputs/ and run npm run aidlc:validate-inputs');
-    log.info('  4. npm run aidlc:init-check && npm run aidlc:run -- --max-iterations 3 --dry-run');
+    log.info(
+      '  3. Put the inputs into .ai-dlc/inputs/ and run npm run sandbox -- exec npm run aidlc:validate-inputs',
+    );
+    log.info(
+      '  4. npm run sandbox -- exec npm run aidlc:run -- --max-iterations 3 --dry-run   (docs/sandbox.md)',
+    );
   }
   return 0;
 }

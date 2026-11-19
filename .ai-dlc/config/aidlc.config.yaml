@@ -12,6 +12,21 @@ output:
   # Language of human-facing outputs (reverse design docs, QCD report commentary): ja | en
   language: ja
 
+sandbox:
+  # Every aidlc:* command runs inside the SDK sandbox (.devcontainer). See docs/sandbox.md.
+  #   strict: every aidlc:* command refuses to run outside the sandbox (default)
+  #   agent:  only commands that start Copilot CLI or execute project code (run, gate, reverse-doc)
+  #   off:    no check (not recommended)
+  enforce: strict
+  # Expected value of AIDLC_SANDBOX, set by .devcontainer/devcontainer.json
+  kind: devcontainer
+  # The default-deny egress firewall (.devcontainer/init-firewall.sh) must be active
+  requireEgressFirewall: true
+  # Refuse while host credentials are forwarded into the sandbox (SSH agent, VS Code git helper)
+  forbidHostCredentialBridges: true
+  # A TCP connection to this host (not on the allow-list) must be refused. Empty = no live probe.
+  egressProbeHost: example.com
+
 loop:
   # N: upper bound of self-healing iterations. Override: npm run aidlc:run -- --max-iterations 5
   maxIterations: 5

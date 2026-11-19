@@ -14,6 +14,7 @@ import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { AidlcConfig, AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
+import { enforceSandbox } from './lib/sandbox.js';
 import {
   CopilotCallRecord,
   GateResult,
@@ -479,6 +480,7 @@ async function main(): Promise<number> {
   const root = findRepoRoot();
   const paths = resolvePaths(root);
   const config = loadConfig(paths.config);
+  await enforceSandbox(config, 'aidlc:qcd', 'tool');
   const { md, result } = writeQcdReport(paths, config, values['run-id']);
   log.info(`QCD report: ${rel(root, md)}`);
   log.info(

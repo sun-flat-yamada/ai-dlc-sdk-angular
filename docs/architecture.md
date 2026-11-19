@@ -31,7 +31,8 @@ flowchart TB
 | `gate-runner.ts` | Runs gates in order; a failing gate turns the following gates into `skipped`. Parses tool output into `{ where, message }` failures for the fix prompt. |
 | `subsystem-kit.ts` | Playwright helpers for generated tests: `loadCase`, `ui`, `mockDeviceApi`, `expectApiRequests`, `expectNoRequest`, `expectCss`. Expected values always come from the JSON. |
 | `qcd-calculator.ts` | QCD metrics from the run history and `human-qcd.json`; Markdown (ja / en) + JSON. |
-| `install.ts` | Copies the SDK into another Angular repository. |
+| `install.ts` | Copies the SDK (including the sandbox) into another Angular repository. The only command allowed outside the sandbox. |
+| `lib/sandbox.ts`, `sandbox-check.ts` | Detects the sandbox (`AIDLC_SANDBOX` + container marker, firewall marker bound to PID 1, live egress probe, host credential bridges) and enforces `sandbox.enforce` at the start of every CLI entry point. |
 
 ## The loop
 
@@ -76,5 +77,9 @@ runs[]: runId, mode, startedAt, endedAt, dryRun, maxIterations, baseline, result
 
 ## Safety model
 
-See [SECURITY.md](../SECURITY.md). In short: explicit allow / deny tool rules for Copilot CLI, no git write
-commands for the agent, mechanical boundary revert, protected inputs and expected values, isolated runners.
+See [SECURITY.md](../SECURITY.md) and [sandbox.md](sandbox.md). In short: every command runs in the
+bundled sandbox (dev container: non-root, no-new-privileges, default-deny egress firewall, no host
+credentials) and the harness refuses to run outside it (`lib/sandbox.ts`); explicit allow / deny tool
+rules for Copilot CLI, no git write commands for the agent, mechanical boundary revert (the sandbox
+definition itself is `immutable`), protected inputs and expected values. A dry-run reports boundary
+violations but never reverts, because no agent ran.

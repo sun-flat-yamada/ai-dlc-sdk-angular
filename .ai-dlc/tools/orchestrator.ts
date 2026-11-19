@@ -26,6 +26,13 @@ import { writeQcdReport } from './qcd-calculator.js';
 import { BoundaryClassifier, evaluateChanges, loadBoundaryPolicy } from './lib/boundary.js';
 import { AidlcConfig, AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { exec } from './lib/exec.js';
+import {
+  SandboxProbe,
+  detectSandbox,
+  enforceSandbox,
+  sandboxPolicy,
+  sandboxViolations,
+} from './lib/sandbox.js';
 import { Git } from './lib/git.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import {
@@ -66,12 +73,57 @@ interface Check {
   required: boolean;
 }
 
+/** Sandbox status as environment checks (required only where `sandbox.enforce` blocks the run). */
+export async function sandboxChecks(
+  config: AidlcConfig,
+  dryRun: boolean,
+  probe?: SandboxProbe,
+): Promise<Check[]> {
+  const policy = sandboxPolicy(config);
+  const status = await detectSandbox(
+    { kind: config.sandbox.kind, egressProbeHost: config.sandbox.egressProbeHost },
+    probe,
+  );
+  const blocking = new Set(sandboxViolations(status, policy, dryRun ? 'tool' : 'agent'));
+  const required = (problem: string | undefined) => problem !== undefined && blocking.has(problem);
+  const declaredProblem = status.problems.find((p) => p.includes('AIDLC_SANDBOX'));
+  const containerProblem = status.problems.find((p) => p.includes('container runtime'));
+  const firewallProblem = [...blocking].find((p) => p.startsWith('egress'));
+  return [
+    {
+      name: `Sandbox (enforce: ${policy.enforce})`,
+      ok: !declaredProblem,
+      detail: declaredProblem ?? `AIDLC_SANDBOX=${status.declared}`,
+      required: required(declaredProblem),
+    },
+    {
+      name: 'Sandbox container runtime',
+      ok: status.container,
+      detail: containerProblem ?? 'container marker found',
+      required: required(containerProblem),
+    },
+    {
+      name: 'Sandbox egress firewall',
+      ok: status.firewall === 'enforced' && status.egress !== 'open',
+      detail: `marker: ${status.firewall}, probe ${config.sandbox.egressProbeHost || '(none)'}: ${status.egress}`,
+      required: required(firewallProblem),
+    },
+    {
+      name: 'Sandbox host credential bridges',
+      ok: status.credentialBridges.length === 0,
+      detail: status.credentialBridges.join('; ') || 'none',
+      required: status.credentialBridges.some((b) => blocking.has(b)),
+    },
+  ];
+}
+
 export async function validateEnvironment(
   paths: AidlcPaths,
   config: AidlcConfig,
   dryRun: boolean,
+  probe?: SandboxProbe,
 ): Promise<Check[]> {
-  const checks: Check[] = [];
+  const checks: Check[] = await sandboxChecks(config, dryRun, probe);
   const add = (name: string, ok: boolean, detail: string, required = true) =>
     checks.push({ name, ok, detail, required });
   const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
@@ -378,7 +430,9 @@ export async function runFullLoop(
       );
       let gates = await runGates(paths, config, {
         dryRun: options.dryRun,
-        revertViolations: options.revert && config.loop.autoRevertBoundaryViolations,
+        // A dry-run calls no agent, so every change belongs to the developer: report, never revert.
+        revertViolations:
+          options.revert && config.loop.autoRevertBoundaryViolations && !options.dryRun,
         baseline: baseline.sha,
         echo: false,
       });
@@ -519,6 +573,7 @@ async function main(): Promise<number> {
   if (options.mode === 'validate-env') {
     return printChecks(await validateEnvironment(paths, config, options.dryRun)) ? 0 : 1;
   }
+  await enforceSandbox(config, `aidlc --mode ${options.mode}`, options.dryRun ? 'tool' : 'agent');
   if (options.mode === 'reverse-doc') {
     await runReverseDoc(paths, config, options);
     log.info(`Reverse docs: ${rel(root, paths.outputs.reverseDocs)}/`);

@@ -7,8 +7,9 @@
  */
 import path from 'node:path';
 import ExcelJS from 'exceljs';
-import { findRepoRoot, resolvePaths } from '../lib/config.js';
+import { findRepoRoot, loadConfig, resolvePaths } from '../lib/config.js';
 import { isMain, log, rel, runCli } from '../lib/cli.js';
+import { enforceSandbox } from '../lib/sandbox.js';
 
 const STATUS_READY =
   'GET /api/v1/status -> 200 {"deviceName":"Panel-01","firmwareVersion":"3.2.0","state":"ready","alerts":[]}';
@@ -222,6 +223,7 @@ export async function buildSampleWorkbook(): Promise<ExcelJS.Workbook> {
 
 async function main(): Promise<number> {
   const paths = resolvePaths(findRepoRoot());
+  await enforceSandbox(loadConfig(paths.config), 'aidlc:sample-excel', 'tool');
   const file = path.join(paths.inputs.subsystemTests, 'ST-NET-network-settings.xlsx');
   const workbook = await buildSampleWorkbook();
   await workbook.xlsx.writeFile(file);

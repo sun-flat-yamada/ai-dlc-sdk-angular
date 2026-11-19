@@ -9,9 +9,13 @@ This repository has **two kinds of AI work**. Identify which one you are doing f
 
 ## Rules for SDK contributors
 
+0. **Everything runs in the sandbox** (`.devcontainer/`, [docs/sandbox.md](docs/sandbox.md)). Start it with
+   `npm run sandbox -- up` and run commands with `npm run sandbox -- exec <command>` or in a sandbox shell.
+   `npm run gate` and every `aidlc:*` command (except `aidlc:install`) refuse to run outside it. Do not
+   lower `sandbox.enforce` or weaken `.devcontainer/` to get around it.
 1. **Quality gate** before every commit: `npm run gate`
-   (typecheck → lint → unit tests → harness tests → secret scan → build). For harness changes also run
-   `npm run aidlc:run -- --max-iterations 3 --dry-run`.
+   (sandbox check → format → typecheck → lint → unit tests → harness tests → secret scan → build). For
+   harness changes also run `npm run aidlc:run -- --max-iterations 3 --dry-run`.
 2. **Sample inputs stay consistent**: `npm run aidlc:parse-excel && npm run aidlc:validate-inputs` reports 0 errors.
    When the `ui-bindings.yaml` schema (`.ai-dlc/tools/lib/ui-bindings.ts`) changes, run `npm run aidlc:schemas`.
 3. **Do not implement the sample feature** (`src/app/features/network-settings/`). The sample code base is
@@ -30,6 +34,7 @@ This repository has **two kinds of AI work**. Identify which one you are doing f
 
 | Path | What |
 | --- | --- |
+| `.devcontainer/` | The sandbox: image, egress firewall (`init-firewall.sh`, `allowed-domains.txt`), entrypoint. `scripts/sandbox.ts` is the host launcher. |
 | `.ai-dlc/tools/` | Harness (TypeScript, run with `tsx`): orchestrator, Copilot CLI adapter, boundary guard, Excel parser, input validator, gate runner, QCD calculator, installer. Tests in `tests/` (Vitest). |
 | `.ai-dlc/config/` | `aidlc.config.yaml` (loop, Copilot CLI, gates, QCD), `boundary-policy.yaml`, generated JSON Schemas |
 | `.ai-dlc/inputs/` | Sample inputs: requirements, HTML/CSS design, OpenAPI, `ui-bindings.yaml`, Excel, human baseline |

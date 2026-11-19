@@ -16,50 +16,40 @@ concurrency:
 
 jobs:
   verify:
-    name: Quality gate (app + harness)
+    # Every step runs inside the AI-DLC sandbox (.devcontainer): the same image, egress firewall and
+    # sandbox checks as a local or agent run. The runner only checks out the repository.
+    name: Quality gate in the sandbox (app + harness + E2E)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      NG_CLI_ANALYTICS: 'false'
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v7
+      - name: Build the sandbox and run every check inside it
+        uses: devcontainers/ci@v0.3
         with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Format check
-        run: npm run format:check
-
-      - name: Secret & privacy scan
-        run: npm run secret-scan
-
-      - name: Typecheck (app, specs, harness)
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Unit tests with coverage (app)
-        run: npm run test:coverage
-
-      - name: Harness tests
-        run: npm run tools:test
-
-      - name: Build
-        run: npm run build
-
-      - name: Gate 0 — validate sample inputs
-        run: |
-          npm run aidlc:parse-excel
-          npm run aidlc:validate-inputs
-
-      - name: Harness dry-run (3 iterations, no Copilot call)
-        run: npm run aidlc:run -- --max-iterations 3 --dry-run
+          push: never
+          runCmd: |
+            set -euo pipefail
+            echo "::group::Sandbox check (container, egress firewall, credential bridges)"
+            npm run aidlc:sandbox-check
+            echo "::endgroup::"
+            echo "::group::Format check";              npm run format:check;    echo "::endgroup::"
+            echo "::group::Secret & privacy scan";     npm run secret-scan;     echo "::endgroup::"
+            echo "::group::Typecheck";                 npm run typecheck;       echo "::endgroup::"
+            echo "::group::Lint";                      npm run lint;            echo "::endgroup::"
+            echo "::group::Unit tests with coverage";  npm run test:coverage;   echo "::endgroup::"
+            echo "::group::Harness tests";             npm run tools:test;      echo "::endgroup::"
+            echo "::group::Build";                     npm run build;           echo "::endgroup::"
+            echo "::group::Gate 0 — validate sample inputs"
+            npm run aidlc:parse-excel
+            npm run aidlc:validate-inputs
+            echo "::endgroup::"
+            echo "::group::Harness dry-run (3 iterations, no Copilot call)"
+            npm run aidlc:run -- --max-iterations 3 --dry-run
+            echo "::endgroup::"
+            echo "::group::E2E smoke (Playwright, Chromium baked into the image)"
+            npm run e2e
+            echo "::endgroup::"
 
       - name: Upload harness reports
         if: always()
@@ -71,29 +61,6 @@ jobs:
             .ai-dlc/outputs/reverse-docs/
             .ai-dlc/outputs/telemetry/run-history.json
           if-no-files-found: ignore
-
-  e2e:
-    name: E2E smoke (Playwright)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      NG_CLI_ANALYTICS: 'false'
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run smoke tests
-        run: npm run e2e
 
       - name: Upload Playwright report
         if: failure()

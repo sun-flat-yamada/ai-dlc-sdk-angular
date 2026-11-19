@@ -1,0 +1,83 @@
+// AI-DLC sandbox: the isolated environment in which every SDK command runs.
+// Open with VS Code "Dev Containers: Reopen in Container", or headless from the host:
+//   npm run sandbox -- up | exec <command> | shell | status | down
+// See docs/sandbox.md for the security model.
+{
+  "name": "AI-DLC sandbox (Angular)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "args": {
+      // Keep in sync with package-lock.json (checked by the harness tests).
+      "PLAYWRIGHT_VERSION": "1.65.1",
+      // GitHub Copilot CLI version the harness was verified with.
+      "COPILOT_CLI_VERSION": "1.0.114"
+    }
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  // The entrypoint starts as root only to apply the egress firewall, then drops to "node".
+  // Every shell, lifecycle command and agent process runs as "node".
+  "containerUser": "root",
+  "remoteUser": "node",
+  "updateRemoteUserUID": true,
+  "overrideCommand": false,
+  "init": true,
+  "runArgs": [
+    "--hostname=aidlc-sandbox",
+    // Least privilege: drop every capability and keep only what the root entrypoint needs for
+    // the firewall (NET_ADMIN, NET_RAW) and for dropping to the sandbox user (SETUID, SETGID).
+    // no-new-privileges: nothing in the container can regain privileges (no sudo, no setuid).
+    // No privileged mode, no Docker socket, no host network or IPC namespace.
+    "--cap-drop=ALL",
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    "--cap-add=SETUID",
+    "--cap-add=SETGID",
+    "--security-opt=no-new-privileges:true",
+    "--pids-limit=4096",
+    // Chromium needs a larger /dev/shm.
+    "--shm-size=1g"
+  ],
+  "mounts": [
+    // Linux node_modules stay in the container (never on the host file system).
+    "source=aidlc-node-modules-${devcontainerId},target=/workspace/node_modules,type=volume",
+    // Copilot CLI login state survives rebuilds without touching the host home directory.
+    "source=aidlc-copilot-${devcontainerId},target=/home/node/.copilot,type=volume"
+  ],
+  "containerEnv": {
+    // Read by the harness (sandbox.kind); every aidlc:* command refuses to run without it.
+    "AIDLC_SANDBOX": "devcontainer",
+    // enforce | off — read by the firewall (as root) from PID 1's environment.
+    "AIDLC_FIREWALL": "${localEnv:AIDLC_FIREWALL:enforce}",
+    "AIDLC_FIREWALL_EXTRA_DOMAINS": "${localEnv:AIDLC_FIREWALL_EXTRA_DOMAINS}",
+    "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+    "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+    "NO_PROXY": "${localEnv:NO_PROXY}",
+    "CI": "${localEnv:CI}"
+  },
+  "remoteEnv": {
+    // Do not forward the host SSH agent into the sandbox.
+    "SSH_AUTH_SOCK": "",
+    // Optional: fine-grained token with the "Copilot Requests" permission only. Otherwise run
+    // `copilot login` inside the sandbox once (stored in the aidlc-copilot volume).
+    "COPILOT_GITHUB_TOKEN": "${localEnv:COPILOT_GITHUB_TOKEN}"
+  },
+  // Waits for the firewall (applied by the entrypoint), then installs dependencies behind it.
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "angular.ng-template",
+        "redhat.vscode-yaml",
+        "dbaeumer.vscode-eslint",
+        "ms-playwright.playwright"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "git.terminalAuthentication": false,
+        "github.gitAuthentication": false
+      }
+    }
+  }
+}

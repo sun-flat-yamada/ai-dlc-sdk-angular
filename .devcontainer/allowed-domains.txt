@@ -1,0 +1,27 @@
+# Egress allow-list of the AI-DLC sandbox (one host name per line, `#` starts a comment).
+# Baked into the image (/etc/aidlc-sandbox/allowed-domains.txt): rebuild the container after a change.
+# Add hosts for a single container with the host environment variable AIDLC_FIREWALL_EXTRA_DOMAINS
+# (comma separated). GitHub's own address ranges come from https://api.github.com/meta.
+
+# npm registry (npm ci, npx)
+registry.npmjs.org
+
+# GitHub and GitHub Copilot CLI (authentication, model API, telemetry)
+github.com
+api.github.com
+api.githubcopilot.com
+api.individual.githubcopilot.com
+api.business.githubcopilot.com
+api.enterprise.githubcopilot.com
+copilot-proxy.githubusercontent.com
+origin-tracker.githubusercontent.com
+copilot-telemetry.githubusercontent.com
+default.exp-tas.com
+
+# VS Code Server and extensions (only needed when you attach VS Code)
+update.code.visualstudio.com
+vscode.download.prss.microsoft.com
+marketplace.visualstudio.com
+gallery.vsassets.io
+gallerycdn.vsassets.io
+vscode.blob.core.windows.net

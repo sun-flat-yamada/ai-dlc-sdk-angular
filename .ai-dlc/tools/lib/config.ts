@@ -12,6 +12,14 @@ const gateSchema = z.object({
   timeoutMinutes: z.number().positive().default(20),
 });
 
+const sandboxDefaults = {
+  enforce: 'strict' as const,
+  kind: 'devcontainer',
+  requireEgressFirewall: true,
+  forbidHostCredentialBridges: true,
+  egressProbeHost: 'example.com',
+};
+
 const coverageSchema = z.object({
   summaryFile: z.string(),
   thresholds: z
@@ -38,6 +46,21 @@ export const configSchema = z.object({
       language: z.enum(['ja', 'en']).default('ja'),
     })
     .default({ language: 'ja' }),
+  /** Isolated execution environment that every aidlc:* command must run in (see docs/sandbox.md). */
+  sandbox: z
+    .object({
+      /** strict: every aidlc:* command; agent: only Copilot CLI / gate execution; off: no check. */
+      enforce: z.enum(['strict', 'agent', 'off']).default(sandboxDefaults.enforce),
+      /** Expected value of AIDLC_SANDBOX (set by .devcontainer/devcontainer.json). */
+      kind: z.string().min(1).default(sandboxDefaults.kind),
+      /** Require the default-deny egress firewall of the sandbox to be active. */
+      requireEgressFirewall: z.boolean().default(sandboxDefaults.requireEgressFirewall),
+      /** Refuse to run while host credentials (SSH agent, VS Code git helper) are forwarded. */
+      forbidHostCredentialBridges: z.boolean().default(sandboxDefaults.forbidHostCredentialBridges),
+      /** Host outside the allow-list; a TCP connection to it must be refused. Empty = no probe. */
+      egressProbeHost: z.string().default(sandboxDefaults.egressProbeHost),
+    })
+    .default(sandboxDefaults),
   loop: z.object({
     maxIterations: z.number().int().min(1).max(50),
     autoRevertBoundaryViolations: z.boolean().default(true),

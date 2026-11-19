@@ -6,8 +6,9 @@
  */
 import path from 'node:path';
 import { z } from 'zod';
-import { findRepoRoot } from './lib/config.js';
+import { findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { isMain, log, runCli } from './lib/cli.js';
+import { enforceSandbox } from './lib/sandbox.js';
 import { writeJsonAtomic } from './lib/telemetry.js';
 import { uiBindingsSchema } from './lib/ui-bindings.js';
 
@@ -21,7 +22,9 @@ export function uiBindingsJsonSchema(): unknown {
 }
 
 async function main(): Promise<number> {
-  const file = path.join(findRepoRoot(), '.ai-dlc', 'config', 'schemas', 'ui-bindings.schema.json');
+  const root = findRepoRoot();
+  await enforceSandbox(loadConfig(resolvePaths(root).config), 'aidlc:schemas', 'tool');
+  const file = path.join(root, '.ai-dlc', 'config', 'schemas', 'ui-bindings.schema.json');
   writeJsonAtomic(file, uiBindingsJsonSchema());
   log.info(`Wrote ${file}`);
   return 0;

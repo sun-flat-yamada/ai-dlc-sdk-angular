@@ -45,15 +45,19 @@ flowchart LR
 | HTML/CSS and OpenAPI do not say *which button calls which API* or *what the screen does on 503* — the AI guesses | **`ui-bindings.yaml`** binds design elements (`data-ui-id`) to API operations (`operationId`), request / response mapping, screen states and error handling; **Gate 0** checks it against the HTML, OpenAPI and Excel before any AI work |
 | The AI rewrites code it should only reuse | **Boundary policy** with five zones (`immutable`, `extensible` = append-only, `rebuildable`, `deletable`, `ignored`) enforced with `git diff` and automatic revert |
 | "Tests pass" is decided by the AI itself | The **final gate is the human Excel specification**: every case must have a passing Playwright test, expected values are hashed and protected, skipped tests fail the gate |
+| The agent runs arbitrary commands with your credentials | Every operation runs in the bundled **sandbox** (dev container): non-root, no-new-privileges, default-deny egress firewall, no host credentials. The harness **refuses to run outside it** |
 | Unbounded agent loops | **Max N iterations** with structured failure feedback, then an unresolved-issues summary |
 | AI output is hard to review | **Reverse design docs** on four human axes (reuse/delta architecture, screen & state spec, API sequences, requirement ↔ test traceability) |
 | "Is it worth it?" | **QCD report**: pass-rate trend, coverage, defects, AI credits / tokens, human effort and lead time vs. the human baseline |
 
 ## Quick start
 
+Everything runs in the bundled **sandbox** ([docs/sandbox.md](docs/sandbox.md)). The host needs only
+Docker and Node.js — no `npm ci` on the host. In VS Code, **Reopen in Container** does the same.
+
 ```bash
-npm ci
-npx playwright install chromium
+npm run sandbox -- up            # build + start the sandbox (firewall, npm ci, Copilot CLI, Chromium)
+npm run sandbox -- shell         # a shell inside the sandbox; the commands below run there
 
 npm run aidlc:parse-excel        # Excel -> .ai-dlc/outputs/generated-tests/subsystem-cases.json
 npm run aidlc:validate-inputs    # Gate 0 + binding matrix (.ai-dlc/outputs/reports/binding-matrix.md)
@@ -61,18 +65,22 @@ npm run aidlc:init-check -- --dry-run
 npm run aidlc:run -- --max-iterations 3 --dry-run   # whole pipeline without calling Copilot
 ```
 
-Real run (needs [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-cli) and a clean git tree):
+Real run (needs a [GitHub Copilot](https://docs.github.com/copilot/how-tos/copilot-cli) subscription and a
+clean git tree). Copilot CLI is already installed in the sandbox:
 
 ```bash
-npm install -g @github/copilot && copilot login
+copilot login                    # once, inside the sandbox (or COPILOT_GITHUB_TOKEN on the host)
 npm run aidlc:init-check
 npm run aidlc:run -- --max-iterations 5
 ```
 
+Single commands can also be run from the host: `npm run sandbox -- exec npm run aidlc:run -- --max-iterations 5`.
+
 Results: `.ai-dlc/outputs/reports/` (final gate, unresolved issues, QCD), `.ai-dlc/outputs/reverse-docs/`,
 `.ai-dlc/outputs/telemetry/run-history.json`.
 
-> Read [SECURITY.md](SECURITY.md) before a real run: the agent runs with tool permissions. Use an isolated environment.
+> Read [SECURITY.md](SECURITY.md) before a real run: the agent runs with tool permissions. Every `aidlc:*`
+> command refuses to run outside the sandbox (`sandbox.enforce: strict` in `aidlc.config.yaml`).
 
 ## Use it in your existing Angular repository
 
@@ -81,14 +89,17 @@ npm run aidlc:install -- --target ../your-panel-app --dry-run   # preview
 npm run aidlc:install -- --target ../your-panel-app
 ```
 
-The installer copies the harness, skills and input skeleton, adds the `aidlc:*` scripts and devDependencies,
-and never touches `src/`. Then adapt `boundary-policy.yaml` and `.ai-dlc/references/` to your code base.
+The installer copies the harness, skills, input skeleton and the sandbox (`.devcontainer/`,
+`scripts/sandbox.ts`), adds the `aidlc:*` / `sandbox` scripts and devDependencies, and never touches `src/`.
+Then run `npm run sandbox -- up` in the target. Then adapt `boundary-policy.yaml` and `.ai-dlc/references/` to your code base.
 See [docs/adoption-guide.md](docs/adoption-guide.md).
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
+| `npm run sandbox -- <up\|exec …\|shell\|status\|down\|rebuild>` | Start / use / remove the sandbox from the host (Docker + Node.js only) |
+| `npm run aidlc:sandbox-check` | Is this process inside the sandbox (container, egress firewall, no host credentials)? |
 | `npm run aidlc:init-check` | Environment check (Node, git, Copilot CLI, Angular CLI, Playwright, inputs, skills) |
 | `npm run aidlc:parse-excel` | Excel subsystem tests → structured JSON + checklist |
 | `npm run aidlc:validate-inputs` | Gate 0: `ui-bindings.yaml` ⇄ HTML ⇄ OpenAPI ⇄ requirements ⇄ Excel; writes the binding matrix |
@@ -99,11 +110,12 @@ See [docs/adoption-guide.md](docs/adoption-guide.md).
 | `npm run aidlc:qcd` | QCD comparison report (`--run-id`) |
 | `npm run aidlc:schemas` | Regenerate the JSON Schema of `ui-bindings.yaml` |
 | `npm run aidlc:install` | Install the SDK into another Angular repository |
-| `npm run gate` | Repository quality gate (typecheck, lint, unit, harness tests, secret scan, build) |
+| `npm run gate` | Repository quality gate (sandbox check, format, typecheck, lint, unit, harness tests, secret scan, build) |
 
 ## Repository layout
 
 ```text
+.devcontainer/   sandbox: Dockerfile, devcontainer.json, egress firewall, allow-list
 .ai-dlc/
   config/        aidlc.config.yaml, boundary-policy.yaml, schemas/
   inputs/        requirements/ ui-design/ api-specs/ ui-bindings/ subsystem-tests/ human-baseline/  (sample: REQ-NET)
@@ -113,11 +125,13 @@ See [docs/adoption-guide.md](docs/adoption-guide.md).
   outputs/       generated-tests/ reverse-docs/ telemetry/ reports/   (generated, git-ignored)
 .github/skills/  01-context-and-boundary … 06-qcd-benchmark (Agent Skills for Copilot CLI)
 src/             sample "existing" Angular 22 front-panel app (800×480, zoneless, signals)
-docs/            architecture, input format, adoption guide
+scripts/         sandbox.ts (host launcher of the sandbox), scan-secrets.ts
+docs/            sandbox, architecture, input format, adoption guide
 ```
 
 ## Documentation
 
+- [Sandbox](docs/sandbox.md) — the isolated environment every command runs in, and how it is enforced
 - [Architecture](docs/architecture.md) — loop, gates, telemetry, safety model
 - [Input format](docs/input-format.md) — why and how to bind HTML/CSS to the REST API (`ui-bindings.yaml`, Excel notation)
 - [Adoption guide](docs/adoption-guide.md) — install into an existing repository, tune the boundary policy, run a pilot
