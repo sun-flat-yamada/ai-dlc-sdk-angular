@@ -111,6 +111,7 @@ See [docs/adoption-guide.md](docs/adoption-guide.md).
 | `npm run aidlc:qcd` | QCD comparison report (`--run-id`) |
 | `npm run aidlc:schemas` | Regenerate the JSON Schema of `ui-bindings.yaml` |
 | `npm run aidlc:install` | Install the SDK into another Angular repository |
+| `npm run pr:mode` / `npm run pr:finish -- <pr>` | PR Auto-Pilot on the host: wait for CI, approve and rebase-merge a pull request ([docs/pr-auto-merge.md](docs/pr-auto-merge.md)) |
 | `npm run gate` | Repository quality gate (sandbox check, format, typecheck, lint, unit, harness tests, secret scan, build) |
 
 ## Repository layout
@@ -133,6 +134,7 @@ docs/            sandbox, architecture, input format, adoption guide
 ## Documentation
 
 - [Sandbox](docs/sandbox.md) — the isolated environment every command runs in, and how it is enforced
+- [Merging pull requests](docs/pr-auto-merge.md) — PR Auto-Pilot: CI check, approval and rebase merge
 - [Architecture](docs/architecture.md) — loop, gates, telemetry, safety model
 - [Input format](docs/input-format.md) — why and how to bind HTML/CSS to the REST API (`ui-bindings.yaml`, Excel notation)
 - [Adoption guide](docs/adoption-guide.md) — install into an existing repository, tune the boundary policy, run a pilot

@@ -81,6 +81,9 @@ npm run aidlc:run -- --max-iterations 5
 > 実際に実行する前に [SECURITY.md](SECURITY.md) を読んでください。エージェントはツール権限付きで動作します。
 > `aidlc:*` コマンドはすべて Sandbox の外では起動を拒否します（`aidlc.config.yaml` の `sandbox.enforce: strict`）。
 
+プルリクエストは CI 成功後に `npm run pr:finish -- <PR 番号>`（ホストで実行）が承認と rebase merge まで自動で行います
+（PR Auto-Pilot、既定で有効。[docs/pr-auto-merge.md](docs/pr-auto-merge.md)、英語）。
+
 ## 既存の Angular リポジトリへの導入
 
 ```bash

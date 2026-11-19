@@ -41,6 +41,8 @@
     "format:check": "prettier --check .",
     "e2e": "playwright test",
     "sandbox": "node scripts/sandbox.ts",
+    "pr:mode": "node scripts/pr-autopilot.ts mode",
+    "pr:finish": "node scripts/pr-autopilot.ts finish",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit && tsc -p .ai-dlc/tools/tsconfig.json --noEmit",
     "tools:test": "vitest run --config .ai-dlc/tools/vitest.config.ts",
     "secret-scan": "tsx scripts/scan-secrets.ts",
