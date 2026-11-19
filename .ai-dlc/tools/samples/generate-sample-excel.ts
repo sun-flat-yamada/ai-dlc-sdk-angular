@@ -33,6 +33,7 @@ export const SAMPLE_HEADERS = [
   '期待画面表示',
   '期待CSS状態',
   '期待APIリクエスト',
+  '要件ID',
   '備考',
 ] as const;
 
@@ -55,7 +56,8 @@ export const SAMPLE_ROWS: string[][] = [
     ),
     lines('@link-led { background-color: rgb(47, 191, 113) }'),
     lines('GET /api/v1/network/ipv4', 'GET /api/v1/network/link'),
-    'REQ-NET-002, REQ-NET-003',
+    'REQ-NET-001, REQ-NET-002, REQ-NET-003',
+    '',
   ],
   [
     'ST-NET-002',
@@ -74,6 +76,7 @@ export const SAMPLE_ROWS: string[][] = [
     '',
     '',
     'REQ-NET-004',
+    '',
   ],
   [
     'ST-NET-003',
@@ -94,6 +97,7 @@ export const SAMPLE_ROWS: string[][] = [
       'PUT /api/v1/network/ipv4 {"dhcp":false,"address":"192.168.0.20","subnetMask":"255.255.255.0","gateway":"192.168.0.1"}',
     ),
     'REQ-NET-006',
+    '',
   ],
   [
     'ST-NET-004',
@@ -112,6 +116,7 @@ export const SAMPLE_ROWS: string[][] = [
     lines('@ip-address-error { color: rgb(255, 90, 90) }'),
     '',
     'REQ-NET-005',
+    '',
   ],
   [
     'ST-NET-005',
@@ -138,6 +143,7 @@ export const SAMPLE_ROWS: string[][] = [
     '',
     lines('PUT /api/v1/network/ipv4 {"gateway":"10.0.0.1"}'),
     'REQ-NET-007',
+    '',
   ],
   [
     'ST-NET-006',
@@ -152,6 +158,7 @@ export const SAMPLE_ROWS: string[][] = [
     lines('@status-message { color: rgb(255, 176, 32) }'),
     lines('PUT /api/v1/network/ipv4 {"dhcp":false,"address":"192.168.0.10"}'),
     'REQ-NET-008',
+    '',
   ],
   [
     'ST-NET-007',
@@ -166,6 +173,7 @@ export const SAMPLE_ROWS: string[][] = [
     lines('@link-led { background-color: rgb(255, 90, 90) }'),
     lines('GET /api/v1/network/link'),
     'REQ-NET-003',
+    '',
   ],
   [
     'ST-NET-008',
@@ -180,6 +188,7 @@ export const SAMPLE_ROWS: string[][] = [
     '',
     '',
     'REQ-NET-009',
+    '',
   ],
 ];
 
@@ -215,7 +224,7 @@ export async function buildSampleWorkbook(): Promise<ExcelJS.Workbook> {
     const added = sheet.addRow(row);
     added.alignment = { wrapText: true, vertical: 'top' };
   }
-  const widths = [12, 16, 36, 8, 22, 16, 60, 40, 50, 40, 60, 20];
+  const widths = [12, 16, 36, 8, 22, 16, 60, 40, 50, 40, 60, 16, 20];
   widths.forEach((w, i) => (sheet.getColumn(i + 1).width = w));
   sheet.views = [{ state: 'frozen', ySplit: 3 }];
   return workbook;

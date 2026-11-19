@@ -4,7 +4,7 @@ import { BoundaryClassifier, BoundaryPolicy, Classification } from './boundary.j
 import { AidlcPaths } from './config.js';
 import { rel } from './cli.js';
 import { FileChange } from './git.js';
-import { SubsystemCaseFile } from './subsystem-cases.js';
+import { SubsystemCaseFile, parseRequirementIds } from './subsystem-cases.js';
 
 export interface ComponentFact {
   file: string;
@@ -156,11 +156,8 @@ export function collectFacts(
       id: c.id,
       category: c.category,
       title: c.title,
-      requirements: [
-        ...new Set(
-          [...`${c.notes} ${c.title}`.matchAll(/\bREQ-[A-Z0-9][A-Z0-9-]*/g)].map((m) => m[0]),
-        ),
-      ],
+      // Older subsystem-cases.json files have no `requirements`; fall back to the notes / title.
+      requirements: c.requirements ?? parseRequirementIds('', `${c.notes} ${c.title}`),
       uiRefs: c.uiRefs ?? [],
       expectedApi: c.expectedApi.map((a) => `${a.method} ${a.path}`),
     })),

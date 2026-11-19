@@ -77,7 +77,7 @@ describe('runFullLoop (dry-run)', () => {
     expect(run.iterations[0]!.copilotCalls[0]).toMatchObject({
       id: 'implement',
       dryRun: true,
-      skills: ['01-context-and-boundary', '02-angular-panel-impl', '03-excel-subsystem-gate'],
+      skills: ['01-context-and-boundary', '03-excel-subsystem-gate', '02-angular-panel-impl'],
     });
     expect(run.iterations[1]!.copilotCalls[0]).toMatchObject({
       id: 'fix',
@@ -128,6 +128,15 @@ describe('runFullLoop (dry-run)', () => {
       'utf8',
     );
     expect(prompt).toContain('iteration 2 of 3: fix');
+    const implementPrompt = readFileSync(
+      path.join(env.dir, run.iterations[0]!.copilotCalls[0]!.promptFile),
+      'utf8',
+    );
+    // Test-first: the Excel-derived tests are written before the implementation step.
+    expect(implementPrompt.indexOf('03-excel-subsystem-gate')).toBeLessThan(
+      implementPrompt.indexOf('02-angular-panel-impl'),
+    );
+    expect(implementPrompt).toContain('subsystem-cases.md');
     expect(prompt).toContain('Gate `build`'.replace('Gate `build`', 'Gates not reached yet'));
     const history = readRunHistory(env.paths.runHistory);
     expect(history.runs.at(-1)).toMatchObject({ runId: run.runId, result: 'exhausted' });

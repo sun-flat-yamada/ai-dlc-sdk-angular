@@ -1,22 +1,27 @@
 ---
 name: 02-angular-panel-impl
-description: Implement Angular front-panel screens, REST API services and their unit tests from the HTML/CSS design, the OpenAPI spec and ui-bindings.yaml. Use when an AI-DLC iteration builds or rebuilds a screen; run build, lint and unit tests until they pass.
+description: Implement Angular front-panel screens, REST API services and their unit tests from the HTML/CSS design, the OpenAPI spec, ui-bindings.yaml and the Excel subsystem cases (acceptance criteria). Use when an AI-DLC iteration builds or rebuilds a screen; run build, lint, unit and subsystem tests until they pass.
 ---
 
 # 02 — Angular front-panel implementation and unit tests
 
 ## Role
 
-Turn the inputs into working Angular code with passing unit tests. The three inputs have one job each:
+Turn the inputs into working Angular code with passing unit tests and passing subsystem tests. The inputs have one job each:
 
 | Input | Decides |
 | --- | --- |
 | `.ai-dlc/inputs/ui-design/*.html` / `*.css` | Structure, text, classes and look |
 | `.ai-dlc/inputs/api-specs/*.openapi.yaml` | Paths, methods, request / response types, error codes |
 | `.ai-dlc/inputs/ui-bindings/ui-bindings.yaml` | Which element triggers which operation, request mapping, response → display, states, error handling, feedback tones |
+| `.ai-dlc/outputs/generated-tests/subsystem-cases.md` / `.json` (from the Excel subsystem test specification) | Acceptance: the exact texts, CSS states and API requests that must result from each operation sequence |
 
 When they disagree, `ui-bindings.yaml` decides behaviour, the HTML/CSS decides presentation, OpenAPI decides the wire format.
-Read `.ai-dlc/outputs/reports/change-impact-map.md` (skill 01) and `.ai-dlc/outputs/reports/binding-matrix.md` first.
+The Excel cases are what the result is accepted against: build each screen so that every case passes, and treat
+a conflict between a case and the other inputs as an input defect — record it in the change impact map
+(Assumptions) and never change the expectation.
+Read `.ai-dlc/outputs/reports/change-impact-map.md` (skill 01), `.ai-dlc/outputs/reports/binding-matrix.md` and the
+Playwright tests written from the cases (skill 03, `.ai-dlc/outputs/generated-tests/subsystem/`) first.
 
 ## Implement, per screen in `ui-bindings.yaml`
 
@@ -41,6 +46,10 @@ Read `.ai-dlc/outputs/reports/change-impact-map.md` (skill 01) and `.ai-dlc/outp
    - API service: every operation, request body, each error kind mapped by `ApiError`.
    - Page: initial load, every `on:` action success path, every bound error kind, validation,
      `enabledWhen` / `visibleWhen`, polling start / stop, feedback tones. Query by `[data-ui-id]`.
+   - Excel cases: for each case, the page unit tests cover the same behaviour at component level (same mocked
+     responses, same expected texts / request bodies) and put the case ID in the test name, e.g.
+     `it('shows 保存しました after saving (ST-NET-003)', ...)`. This keeps requirement → case → unit test
+     traceable and catches a mismatch before the slower subsystem gate.
    - Follow `.ai-dlc/references/coding-and-test-conventions.md`.
 
 ## Verify (repeat until green)
@@ -49,6 +58,7 @@ Read `.ai-dlc/outputs/reports/change-impact-map.md` (skill 01) and `.ai-dlc/outp
 npm run build
 npm run lint
 npm run test:coverage
+npx playwright test --config .ai-dlc/tools/playwright.subsystem.config.ts
 ```
 
 Coverage thresholds: statements 80, branches 70, functions 80, lines 80.
@@ -58,4 +68,5 @@ Coverage thresholds: statements 80, branches 70, functions 80, lines 80.
 - Edit `immutable` files (core, shared, styles, config, inputs, harness) — reuse them.
 - Remove or reorder lines in `extensible` files.
 - Invent operations, fields or texts that are not in the inputs. Record gaps in the change impact map.
+- Edit the generated subsystem tests to make them pass, other than fixing a selector or a wait (skill 03).
 - Skip tests (`it.skip`, `xit`, `.only`) or lower thresholds.

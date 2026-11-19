@@ -2,7 +2,7 @@
  * Gate 0 — input validation. Checks that the human inputs are consistent BEFORE any AI work:
  *
  *   ui-bindings.yaml  <->  HTML design (data-ui-id)  <->  OpenAPI (operationId, schemas)
- *                     <->  requirements (REQ IDs)    <->  Excel cases (@ui-id references)
+ *                     <->  requirements (REQ IDs)    <->  Excel cases (@ui-id, API, REQ IDs)
  *
  *   npm run aidlc:validate-inputs
  *
@@ -36,6 +36,8 @@ export interface OperationInfo {
   requestSchema?: JsonSchema;
   responseSchema?: JsonSchema;
   responseCodes: string[];
+  /** Path prefix from the first OpenAPI `servers` entry (`/api/v1`); requests on the wire carry it. */
+  basePath: string;
   /** `x-ui-binding: shared` — used by shared modules (e.g. the status bar), not bound per screen. */
   shared: boolean;
   file: string;
@@ -119,10 +121,49 @@ export function schemaHasPath(
   return true;
 }
 
+/** Path part of an OpenAPI server URL (`/api/v1`, `https://host/api/v1`); '' when absent. */
+export function serverBasePath(url: string | undefined): string {
+  if (!url) return '';
+  let p = url;
+  try {
+    p = new URL(url).pathname;
+  } catch {
+    // relative server URL such as /api/v1
+  }
+  return p.replace(/\/+$/, '');
+}
+
+/** Matches `/items/{id}` style OpenAPI path templates against a concrete path (query string ignored). */
+export function openApiPathMatches(template: string, actual: string): boolean {
+  const pattern = template
+    .split(/(\{[^}]+\})/)
+    .map((part) => (part.startsWith('{') ? '[^/]+' : part.replace(/[.*+?^$()|[\]\\]/g, '\\$&')))
+    .join('');
+  return new RegExp(`^${pattern}/?$`).test(actual.split('?')[0]!);
+}
+
+/** The operation a concrete request (`PUT /api/v1/network/ipv4`) is sent to, if any. */
+export function findOperationForRequest(
+  operations: Iterable<OperationInfo>,
+  method: string,
+  requestPath: string,
+): OperationInfo | undefined {
+  for (const op of operations) {
+    if (
+      op.method === method.toUpperCase() &&
+      openApiPathMatches(op.basePath + op.path, requestPath)
+    )
+      return op;
+  }
+  return undefined;
+}
+
 export function loadOperations(file: string): { doc: unknown; operations: OperationInfo[] } {
   const doc = parse(readFileSync(file, 'utf8')) as {
     paths?: Record<string, Record<string, unknown>>;
+    servers?: { url?: string }[];
   };
+  const basePath = serverBasePath(doc.servers?.[0]?.url);
   const operations: OperationInfo[] = [];
   for (const [p, item] of Object.entries(doc.paths ?? {})) {
     for (const method of ['get', 'put', 'post', 'patch', 'delete']) {
@@ -145,6 +186,7 @@ export function loadOperations(file: string): { doc: unknown; operations: Operat
           ? op.responses?.[okCode]?.content?.['application/json']?.schema
           : undefined,
         responseCodes: Object.keys(op.responses ?? {}),
+        basePath,
         shared: op['x-ui-binding'] === 'shared',
         file,
       });
@@ -343,13 +385,67 @@ export function validateInputs(paths: AidlcPaths): ValidationResult {
       );
   }
 
-  // Excel cases may reference elements as @ui-id.
+  // Excel cases: @ui-id references, API notation against OpenAPI, requirement traceability.
   if (existsSync(paths.subsystemCases)) {
     const cases = JSON.parse(readFileSync(paths.subsystemCases, 'utf8')) as SubsystemCaseFile;
+    const knownReqs = new Set(
+      [...reqText.matchAll(/\bREQ-[A-Z0-9][A-Z0-9-]*[A-Z0-9]\b/g)].map((m) => m[0]),
+    );
+    const covered = new Set<string>();
     for (const c of cases.cases) {
+      const at = `${c.sheet}!R${c.row} ${c.id}`;
       for (const ref of c.uiRefs ?? []) {
-        if (!allUiIds.has(ref))
-          err(`${c.sheet}!R${c.row} ${c.id}`, `@${ref} is not a ui-id in ui-bindings.yaml`);
+        if (!allUiIds.has(ref)) err(at, `@${ref} is not a ui-id in ui-bindings.yaml`);
+      }
+      for (const m of c.mockApi ?? []) {
+        const op = findOperationForRequest(operations.values(), m.method, m.path);
+        if (!op) {
+          err(at, `API response "${m.method} ${m.path}" matches no operation in the OpenAPI spec`);
+        } else if (
+          !op.responseCodes.includes(String(m.status)) &&
+          !op.responseCodes.includes(`${String(m.status)[0]}XX`) &&
+          !op.responseCodes.includes('default')
+        ) {
+          warn(
+            at,
+            `API response status ${m.status} is not declared for ${op.operationId} (${op.method} ${op.path})`,
+          );
+        }
+      }
+      for (const r of c.expectedApi ?? []) {
+        const op = findOperationForRequest(operations.values(), r.method, r.path);
+        if (!op) {
+          err(
+            at,
+            `expected API request "${r.method} ${r.path}" matches no operation in the OpenAPI spec`,
+          );
+          continue;
+        }
+        const props = propertiesOf(docs.get(op.operationId), op.requestSchema);
+        if (r.body && typeof r.body === 'object' && !Array.isArray(r.body) && props.size) {
+          for (const k of Object.keys(r.body)) {
+            if (!props.has(k))
+              err(
+                at,
+                `"${k}" in the expected ${op.operationId} request is not a property of its request body`,
+              );
+          }
+        }
+      }
+      const reqs = c.requirements ?? [];
+      if (!reqs.length) warn(at, 'no requirement ID (requirement ID column or REQ-… in the notes)');
+      for (const req of reqs) {
+        covered.add(req);
+        if (!knownReqs.has(req)) warn(at, `${req} not found in inputs/requirements/`);
+      }
+    }
+    for (const [screenId, screen] of Object.entries(bindings.screens)) {
+      for (const req of screen.requirements) {
+        if (!covered.has(req))
+          warn(
+            `${relB}#screens.${screenId}.requirements`,
+            `${req} is not verified by any Excel subsystem case`,
+          );
       }
     }
   }
