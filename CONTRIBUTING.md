@@ -35,6 +35,10 @@ else — Node.js for the build, Angular CLI, Playwright Chromium, GitHub Copilot
 
 5. Open a pull request using the template (description in Japanese is welcome). The `main` branch is
    updated by **rebase merge** only.
+6. Merge it. With PR Auto-Pilot on (`PR_AUTO_PILOT`, the repository default; `npm run pr:mode`), open the
+   pull request ready for review and run `npm run pr:finish -- <number>` on the host: it waits for CI,
+   approves and rebase-merges the checked head without bypassing branch protection. With it off, open a
+   draft and a maintainer merges. See [docs/pr-auto-merge.md](docs/pr-auto-merge.md).
 
 ## Where to change what
 

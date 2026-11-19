@@ -24,6 +24,11 @@ This repository has **two kinds of AI work**. Identify which one you are doing f
    absolute user paths. `npm run secret-scan` must pass.
 5. **Conventional Commits** in English (`feat(harness): ...`). Branches: `<type>/<issue>-<slug>`.
    Never push directly to `main`; use a pull request.
+   **PR Auto-Pilot** (`PR_AUTO_PILOT`, on by default; `npm run pr:mode`): open the pull request ready for
+   review, then run `npm run pr:finish -- <number>` on the host. Exit code `2` means CI is still running:
+   wait for the PR event and run it again. It approves and rebase-merges the checked head; never use an
+   admin merge, bypass branch protection, or merge with failed/running checks, conflicts or requested
+   changes. With it off, open a draft and stop. See [docs/pr-auto-merge.md](docs/pr-auto-merge.md).
 6. **Language**: code, identifiers, comments and commit messages in English. Issues, PR descriptions and
    replies to the maintainer in Japanese. Documentation keeps the language of the file
    (`README.md` English, `README.ja.md` Japanese — keep them in sync).
@@ -35,6 +40,7 @@ This repository has **two kinds of AI work**. Identify which one you are doing f
 | Path | What |
 | --- | --- |
 | `.devcontainer/` | The sandbox: image, egress firewall (`init-firewall.sh`, `allowed-domains.txt`), entrypoint. `scripts/sandbox.ts` is the host launcher. |
+| `scripts/pr-autopilot.ts` | Host-side PR Auto-Pilot (`pr:mode`, `pr:finish`): CI check, approval, rebase merge via the GitHub REST API. Default in `.env.example`. |
 | `.ai-dlc/tools/` | Harness (TypeScript, run with `tsx`): orchestrator, Copilot CLI adapter, boundary guard, Excel parser, input validator, gate runner, QCD calculator, installer. Tests in `tests/` (Vitest). |
 | `.ai-dlc/config/` | `aidlc.config.yaml` (loop, Copilot CLI, gates, QCD), `boundary-policy.yaml`, generated JSON Schemas |
 | `.ai-dlc/inputs/` | Sample inputs: requirements, HTML/CSS design, OpenAPI, `ui-bindings.yaml`, Excel, human baseline |
