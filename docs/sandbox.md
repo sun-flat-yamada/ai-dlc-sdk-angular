@@ -50,7 +50,7 @@ token with the _Copilot Requests_ permission only. Host credentials are never mo
 | Layer | Mechanism | Defined in |
 | --- | --- | --- |
 | File system | Only the repository is bind-mounted (`/workspace`). No home directory, SSH keys, cloud credentials or Docker socket. `node_modules` lives in a named volume, so Linux binaries never reach the host. | `devcontainer.json` (`workspaceMount`, `mounts`) |
-| Privileges | Processes run as `node`. No `sudo` in the image, `--security-opt=no-new-privileges`, `--cap-drop=ALL` (only `NET_ADMIN`, `NET_RAW`, `SETUID`, `SETGID` remain, used by the root entrypoint), `--pids-limit`. | `Dockerfile`, `devcontainer.json` (`runArgs`) |
+| Privileges | Processes run as `node`. No `sudo` in the image, `--security-opt=no-new-privileges`, `--cap-drop=ALL` (only `NET_ADMIN`, `NET_RAW`, `CHOWN`, `SETUID`, `SETGID` remain, used by the root entrypoint), `--pids-limit`. | `Dockerfile`, `devcontainer.json` (`runArgs`) |
 | Network | Default-deny egress firewall (iptables + ipset) applied **as root by the entrypoint on every container start**, before any user process. Only DNS and the hosts in `allowed-domains.txt` (+ GitHub's published ranges) are reachable; everything else is rejected. Verified at start (a non-listed host must fail). | `entrypoint.sh`, `init-firewall.sh`, `allowed-domains.txt` |
 | Tools | Copilot CLI and Playwright Chromium are baked into the image at pinned versions, so the agent never downloads tools at run time. | `Dockerfile`, `devcontainer.json` (`build.args`) |
 | Credentials | SSH agent forwarding is cleared, git uses no credential helper, VS Code git authentication is disabled. | `devcontainer.json`, `post-create.sh` |

@@ -26,12 +26,14 @@
   "runArgs": [
     "--hostname=aidlc-sandbox",
     // Least privilege: drop every capability and keep only what the root entrypoint needs for
-    // the firewall (NET_ADMIN, NET_RAW) and for dropping to the sandbox user (SETUID, SETGID).
+    // the firewall (NET_ADMIN, NET_RAW), for handing the named volumes to the sandbox user
+    // (CHOWN) and for dropping to the sandbox user (SETUID, SETGID).
     // no-new-privileges: nothing in the container can regain privileges (no sudo, no setuid).
     // No privileged mode, no Docker socket, no host network or IPC namespace.
     "--cap-drop=ALL",
     "--cap-add=NET_ADMIN",
     "--cap-add=NET_RAW",
+    "--cap-add=CHOWN",
     "--cap-add=SETUID",
     "--cap-add=SETGID",
     "--security-opt=no-new-privileges:true",
