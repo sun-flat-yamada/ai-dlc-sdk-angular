@@ -11,6 +11,15 @@ if ! /usr/local/bin/aidlc-init-firewall >/run/aidlc-sandbox/firewall.log 2>&1; t
 fi
 chmod 0644 /run/aidlc-sandbox/firewall.log
 
+# updateRemoteUserUID may give the sandbox user the host's UID after the named volumes were
+# created with the image's UID: hand the volumes to the current sandbox user.
+user="${AIDLC_SANDBOX_USER:-node}"
+for dir in /workspace/node_modules "/home/${user}/.copilot"; do
+  if [ -d "${dir}" ] && [ "$(stat -c %u "${dir}")" != "$(id -u "${user}")" ]; then
+    chown -R "${user}:${user}" "${dir}"
+  fi
+done
+
 if [ "$#" -eq 0 ]; then
   set -- sleep infinity
 fi
