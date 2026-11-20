@@ -15,6 +15,7 @@ import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { readBaseline, runBoundaryGuard } from './boundary-guard.js';
+import { parseWorkbooks } from './excel-to-test-ast.js';
 import { inputsGate } from './validate-inputs.js';
 import {
   AidlcConfig,
@@ -47,6 +48,11 @@ export interface GateRunOptions {
   /** Revert boundary violations (used by the loop). */
   revertViolations?: boolean;
   baseline?: string;
+  /**
+   * Hash of the Excel-derived cases that the orchestrator computed at the start of the run and keeps
+   * in memory. When set, Gate 4 also requires `baseline.json` to exist (it is never deleted mid-run).
+   */
+  expectedCasesSha256?: string;
   echo?: boolean;
 }
 
@@ -185,10 +191,45 @@ function listSpecs(dir: string): string[] {
   );
 }
 
+/**
+ * Verifies that the expected values in `subsystem-cases.json` are exactly what the Excel workbooks
+ * say. Everything under `.ai-dlc/outputs/` is writable by the agent and git-ignored, so the file's
+ * own `casesSha256` and `baseline.json` prove nothing on their own: the trusted references are the
+ * workbooks in the immutable `.ai-dlc/inputs/` (re-parsed here) and the hash the orchestrator keeps
+ * in memory. Returns the failure messages (empty when the cases are intact).
+ */
+export async function verifyCaseIntegrity(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  cases: SubsystemCaseFile,
+  expectedCasesSha256?: string,
+): Promise<string[]> {
+  const problems: string[] = [];
+  const actualHash = hashCases(cases.cases);
+  if (actualHash !== cases.casesSha256)
+    problems.push('The cases do not match the casesSha256 recorded in subsystem-cases.json.');
+  try {
+    const fromExcel = (await parseWorkbooks(paths, config)).casesSha256;
+    if (actualHash !== fromExcel)
+      problems.push('The cases differ from the Excel workbooks in .ai-dlc/inputs/subsystem-tests.');
+  } catch (e) {
+    problems.push(`The Excel workbooks could not be re-parsed: ${(e as Error).message}`);
+  }
+  if (expectedCasesSha256 !== undefined && actualHash !== expectedCasesSha256)
+    problems.push('The cases differ from the snapshot taken at the start of the run.');
+  const snapshot = readBaseline(paths);
+  if (snapshot?.subsystemCasesSha256 && snapshot.subsystemCasesSha256 !== actualHash)
+    problems.push('The cases differ from the hash recorded in baseline.json.');
+  if (expectedCasesSha256 !== undefined && snapshot?.subsystemCasesSha256 !== expectedCasesSha256)
+    problems.push('baseline.json is missing or was modified during the run.');
+  return problems;
+}
+
 export async function runSubsystemGate(
   paths: AidlcPaths,
   config: AidlcConfig,
   echo = false,
+  expectedCasesSha256?: string,
 ): Promise<GateResult> {
   const gate = config.gates.subsystem;
   const started = Date.now();
@@ -212,18 +253,28 @@ export async function runSubsystemGate(
       },
     ]);
   }
-  const cases = JSON.parse(readFileSync(paths.subsystemCases, 'utf8')) as SubsystemCaseFile;
-  // Expected values come from humans. Any drift from the snapshot is tampering, not a fix.
-  const snapshotHash = readBaseline(paths)?.subsystemCasesSha256;
-  const actualHash = hashCases(cases.cases);
-  if (actualHash !== cases.casesSha256 || (snapshotHash && snapshotHash !== actualHash)) {
+  let cases: SubsystemCaseFile;
+  try {
+    cases = JSON.parse(readFileSync(paths.subsystemCases, 'utf8')) as SubsystemCaseFile;
+    if (!Array.isArray(cases.cases)) throw new Error('"cases" is not an array');
+  } catch (e) {
     return fail('Expected values were modified', [
       {
         where: rel(paths.root, paths.subsystemCases),
-        message:
-          'subsystem-cases.json differs from the Excel snapshot. Never edit expected values; regenerate with `npm run aidlc:parse-excel`.',
+        message: `subsystem-cases.json is unreadable (${(e as Error).message}). Regenerate it with \`npm run aidlc:parse-excel\`.`,
       },
     ]);
+  }
+  // Expected values come from humans. Any drift from the Excel workbooks is tampering, not a fix.
+  const problems = await verifyCaseIntegrity(paths, config, cases, expectedCasesSha256);
+  if (problems.length) {
+    return fail(
+      'Expected values were modified',
+      problems.map((p) => ({
+        where: rel(paths.root, paths.subsystemCases),
+        message: `${p} Never edit expected values; regenerate with \`npm run aidlc:parse-excel\`.`,
+      })),
+    );
   }
   const specDir = path.join(paths.outputs.generatedTests, 'subsystem');
   if (listSpecs(specDir).length === 0) {
@@ -350,7 +401,7 @@ export async function runGates(
             ? await runLintGate(paths, config, echo)
             : name === 'unit'
               ? await runUnitGate(paths, config, echo)
-              : await runSubsystemGate(paths, config, echo);
+              : await runSubsystemGate(paths, config, echo, options.expectedCasesSha256);
     }
     log.info(`[${result.status.toUpperCase()}] ${name}: ${result.summary}`);
     results.push(result);
