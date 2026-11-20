@@ -25,6 +25,7 @@ import {
   loadConfig,
   resolvePaths,
 } from './lib/config.js';
+import { DependencyGuard } from './lib/dependency-guard.js';
 import { exec, stripAnsi, tail } from './lib/exec.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import { enforceSandbox } from './lib/sandbox.js';
@@ -53,6 +54,11 @@ export interface GateRunOptions {
    * in memory. When set, Gate 4 also requires `baseline.json` to exist (it is never deleted mid-run).
    */
   expectedCasesSha256?: string;
+  /**
+   * In-memory fingerprint of git-ignored dependency directories (node_modules), captured by the
+   * orchestrator before the agent ran. Checked by Gate 1; build caches are cleared before the gates.
+   */
+  dependencies?: DependencyGuard;
   echo?: boolean;
 }
 
@@ -371,6 +377,7 @@ export async function runGates(
   const selected = options.only?.length ? options.only : GATE_ORDER;
   const results: GateResult[] = [];
   let blocked: GateName | undefined;
+  if (!options.dryRun) options.dependencies?.clearCaches();
   for (const name of GATE_ORDER) {
     if (!selected.includes(name)) continue;
     if (blocked) {
@@ -383,7 +390,11 @@ export async function runGates(
     } else if (name === 'boundary') {
       const baseline = options.baseline ?? readBaseline(paths)?.sha ?? config.project.baseRef;
       result = (
-        await runBoundaryGuard(paths, { baseline, revert: options.revertViolations ?? false })
+        await runBoundaryGuard(paths, {
+          baseline,
+          revert: options.revertViolations ?? false,
+          ...(options.dependencies ? { dependencies: options.dependencies } : {}),
+        })
       ).gate;
     } else if (options.dryRun) {
       result = skipped(name, 'Skipped: dry-run');

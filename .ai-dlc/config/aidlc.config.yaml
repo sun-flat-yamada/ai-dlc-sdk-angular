@@ -34,6 +34,16 @@ loop:
   autoRevertBoundaryViolations: true
   # Refuse to start a real (non dry-run) loop with uncommitted changes (--allow-dirty overrides)
   requireCleanWorkingTree: true
+  # git cannot see git-ignored directories such as node_modules, so the boundary guard alone would miss a
+  # rewritten test runner or coverage reporter. The loop fingerprints them in memory before the first
+  # agent call; any change fails Gate 1 and the directories are rebuilt with restoreCommand.
+  dependencyGuard:
+    enabled: true
+    paths: [node_modules]
+    restoreCommand: [npm, ci, --no-audit, --no-fund]
+    restoreTimeoutMinutes: 20
+    # Build caches deleted before the gates, so no gate reuses state the agent could have written
+    clearBeforeGates: [.angular/cache]
 
 copilot:
   # GitHub Copilot CLI (npm install -g @github/copilot). Verified with 1.0.114.

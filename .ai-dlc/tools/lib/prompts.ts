@@ -40,7 +40,7 @@ function skillRef(paths: AidlcPaths, skill: string): string {
 
 const GUARDRAILS = `## Non-negotiable rules
 
-1. Obey \`.ai-dlc/config/boundary-policy.yaml\`. Changes in \`immutable\` / \`ignored\` zones, removed lines in \`extensible\` files and unclassified paths are reverted automatically and reported as violations.
+1. Obey \`.ai-dlc/config/boundary-policy.yaml\`. Changes in \`immutable\` / \`ignored\` zones, removed lines in \`extensible\` files and unclassified paths are reverted automatically and reported as violations. Installed packages (\`node_modules/\`) are fingerprinted: any change there, including \`npm install\`, fails the boundary gate and they are reinstalled from \`package-lock.json\`.
 2. Never edit anything under \`.ai-dlc/inputs/\`, \`.ai-dlc/config/\`, \`.ai-dlc/tools/\`, \`.github/skills/\` or \`subsystem-cases.json\`. Expected values come from humans; a test is fixed by fixing the implementation or a wrong selector, never by weakening an expectation.
 3. Never use \`test.skip\`, \`test.fixme\`, \`it.skip\`, \`xit\` or \`.only\`. Skipped tests fail the gate.
 4. Do not run \`git commit\`, \`git push\`, \`git reset\`, \`git checkout\` or \`git clean\`. The harness owns version control.
