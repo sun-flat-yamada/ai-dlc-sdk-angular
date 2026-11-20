@@ -17,6 +17,7 @@ import {
   loadBoundaryPolicy,
 } from './lib/boundary.js';
 import { AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
+import { DependencyGuard } from './lib/dependency-guard.js';
 import { Git } from './lib/git.js';
 import { isMain, log, runCli } from './lib/cli.js';
 import { enforceSandbox } from './lib/sandbox.js';
@@ -60,6 +61,8 @@ export async function recordBaseline(
 export interface GuardOptions {
   baseline: string;
   revert: boolean;
+  /** Fingerprint of git-ignored directories (node_modules) captured before the agent ran. */
+  dependencies?: DependencyGuard;
 }
 
 /** Runs the guard and returns the report plus a gate result for the loop. */
@@ -80,19 +83,36 @@ export async function runBoundaryGuard(
       reverted.push(v.path);
     }
   }
+  const deps = options.dependencies ? await options.dependencies.check(options.revert) : undefined;
+  const failures: GateResult['failures'] = report.violations.map((v) => ({
+    where: v.from ? `${v.from} -> ${v.path}` : v.path,
+    message: `[${v.zone}/${v.rule}] ${v.message}${options.revert ? ' (reverted to baseline)' : ''}`,
+  }));
+  for (const c of deps?.changed ?? []) {
+    failures.push({
+      where: c.path,
+      message: `[ignored/dependency-changed] ${c.files} file(s) changed in a git-ignored dependency directory. Never modify installed packages; change the implementation instead.${
+        deps?.restored
+          ? ` (${deps.restored.ok ? deps.restored.detail : `NOT restored: ${deps.restored.detail}`})`
+          : ''
+      }`,
+    });
+  }
+  const violations = report.violations.length + (deps?.changed.length ?? 0);
   const gate: GateResult = {
     gate: 'boundary',
-    status: report.violations.length === 0 ? 'pass' : 'fail',
+    status: violations === 0 ? 'pass' : 'fail',
     durationMs: Date.now() - started,
     summary:
-      report.violations.length === 0
+      violations === 0
         ? `${report.changes.length} changed path(s), no boundary violation`
-        : `${report.violations.length} boundary violation(s)${options.revert ? ' — reverted' : ''}`,
-    failures: report.violations.map((v) => ({
-      where: v.from ? `${v.from} -> ${v.path}` : v.path,
-      message: `[${v.zone}/${v.rule}] ${v.message}${options.revert ? ' (reverted to baseline)' : ''}`,
-    })),
-    metrics: { changedPaths: report.changes.length, violations: report.violations.length },
+        : `${violations} boundary violation(s)${options.revert ? ' — reverted' : ''}`,
+    failures,
+    metrics: {
+      changedPaths: report.changes.length,
+      violations,
+      ...(deps ? { dependencyViolations: deps.changed.length } : {}),
+    },
   };
   return { report, gate, reverted };
 }

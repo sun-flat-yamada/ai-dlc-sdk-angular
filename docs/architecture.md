@@ -53,6 +53,15 @@ ends as `exhausted` — that exercises the bound and the reports. `--simulate-pa
 
 ## Boundary revert
 
+git does not see git-ignored paths, so `ignored` zones such as `node_modules/` are protected separately
+(`lib/dependency-guard.ts`, `loop.dependencyGuard`). Before the first agent call the orchestrator
+fingerprints every entry under `node_modules/` (path, type, mode, size, inode, mtime and ctime in
+nanoseconds) and keeps it in memory. A write always changes the ctime, which user space cannot set back.
+Gate 1 fails on any difference, rebuilds the directory with `npm ci` from the immutable lockfile and
+fingerprints it again. `.angular/cache` is deleted before the gates, and `dist/`, `coverage/` and the
+Playwright report are regenerated (or deleted) by the gates themselves. Standalone `aidlc:gate` /
+`aidlc:guard` have no trusted fingerprint and check git-visible paths only.
+
 A violating file is restored to its baseline content **as a whole** (a new file in a protected zone is
 deleted). In an `extensible` file this also drops the allowed additions made in the same file; the
 violation is reported to the next iteration, which re-applies the change as a pure addition.

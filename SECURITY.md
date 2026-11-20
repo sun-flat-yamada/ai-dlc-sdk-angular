@@ -32,7 +32,9 @@ following before running `npm run aidlc:run` without `--dry-run`.
    (`sandbox.enforce: strict`); do not lower that setting for real runs.
 4. **Boundary guard** reverts changes to protected paths after each iteration, including the sandbox
    definition (`.devcontainer/**`), so the agent cannot weaken its own sandbox for the next run.
-   It is a safety net for the code base; the sandbox is what contains the commands.
+   It is a safety net for the code base; the sandbox is what contains the commands. Git-ignored
+   dependencies (`node_modules/`) are fingerprinted in memory before the agent runs; any change fails
+   Gate 1 and they are reinstalled from `package-lock.json` (`loop.dependencyGuard`).
 5. **Confidential inputs**: requirements, device API specifications and test specifications are sent to
    the model as context. Check your organization's Copilot policies (content exclusion, data retention)
    before using real documents. Generated outputs are git-ignored by default.

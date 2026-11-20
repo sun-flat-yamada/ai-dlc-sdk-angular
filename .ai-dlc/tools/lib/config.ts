@@ -66,6 +66,23 @@ export const configSchema = z.object({
     autoRevertBoundaryViolations: z.boolean().default(true),
     /** Require a clean git working tree before a full loop starts. */
     requireCleanWorkingTree: z.boolean().default(true),
+    /**
+     * Git-ignored directories the boundary guard cannot see (lib/dependency-guard.ts). They are
+     * fingerprinted before the first agent call; any change fails Gate 1 and is rebuilt.
+     */
+    dependencyGuard: z
+      .object({
+        enabled: z.boolean().default(true),
+        paths: z.array(z.string().min(1)).default(['node_modules']),
+        /** Rebuilds the guarded directories from the lockfile after a violation. Empty = report only. */
+        restoreCommand: z
+          .array(z.string().min(1))
+          .default(['npm', 'ci', '--no-audit', '--no-fund']),
+        restoreTimeoutMinutes: z.number().positive().default(20),
+        /** Build caches deleted before the gates run. */
+        clearBeforeGates: z.array(z.string().min(1)).default(['.angular/cache']),
+      })
+      .prefault({}),
   }),
   copilot: z.object({
     command: z.string().min(1),
