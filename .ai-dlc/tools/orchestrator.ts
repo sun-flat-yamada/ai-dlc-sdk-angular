@@ -35,6 +35,7 @@ import {
 } from './lib/sandbox.js';
 import { DependencyGuard } from './lib/dependency-guard.js';
 import { Git } from './lib/git.js';
+import { PostProcessGuard, PostProcessScope } from './lib/post-process-guard.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import {
   SKILLS,
@@ -46,6 +47,7 @@ import {
 import { collectFacts } from './lib/reverse-doc-facts.js';
 import { renderReverseDocs } from './lib/reverse-doc-render.js';
 import {
+  CopilotCallRecord,
   GateResult,
   IterationRecord,
   RunRecord,
@@ -273,13 +275,51 @@ function renderUnresolved(run: RunRecord): string {
   return lines.join('\n');
 }
 
+export interface PostProcessOptions {
+  dryRun: boolean;
+  /** Restore changes made outside the allowed paths (off with --no-revert or in a dry-run). */
+  revert: boolean;
+  dependencies?: DependencyGuard;
+}
+
+/**
+ * Runs one post-process Copilot call under the post-process guard: anything written outside `scope`
+ * is restored and recorded as a violation on the call record.
+ */
+async function guardedCall(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  request: Parameters<typeof callCopilot>[2],
+  scope: PostProcessScope,
+  options: PostProcessOptions,
+): Promise<CopilotCallRecord> {
+  const workDir = rel(paths.root, request.workDir);
+  const guard = new PostProcessGuard(
+    paths,
+    { ...scope, allowed: [...scope.allowed, workDir] },
+    options.dependencies,
+  );
+  await guard.capture();
+  const record = await callCopilot(paths, config, request);
+  const violations = await guard.verify(options.revert);
+  if (violations.length) {
+    record.violations = violations;
+    log.warn(
+      `Post-process ${request.id}: ${violations.length} boundary violation(s)${options.revert ? ' — restored' : ''}`,
+    );
+    for (const v of violations) log.warn(`  ${v.where}: ${v.message}`);
+  }
+  return record;
+}
+
 async function postProcess(
   paths: AidlcPaths,
   config: AidlcConfig,
   run: RunRecord,
   workDir: string,
-  dryRun: boolean,
+  options: PostProcessOptions,
 ): Promise<void> {
+  const { dryRun } = options;
   const git = new Git(paths.root);
   const policy = loadBoundaryPolicy(paths.boundaryPolicy);
   const changes = run.baseline ? await git.changesSince(run.baseline) : [];
@@ -305,14 +345,20 @@ async function postProcess(
   );
   log.info(`Reverse docs (facts pre-filled): ${docs.map((d) => rel(paths.root, d)).join(', ')}`);
   run.postProcess.push(
-    await callCopilot(paths, config, {
-      id: 'post-reverse-doc',
-      phase: 'reverse-doc',
-      skills: [SKILLS.reverseDoc],
-      prompt: buildReverseDocPrompt(paths, config, factsFile),
-      workDir,
-      dryRun,
-    }),
+    await guardedCall(
+      paths,
+      config,
+      {
+        id: 'post-reverse-doc',
+        phase: 'reverse-doc',
+        skills: [SKILLS.reverseDoc],
+        prompt: buildReverseDocPrompt(paths, config, factsFile),
+        workDir,
+        dryRun,
+      },
+      { allowed: [rel(paths.root, paths.outputs.reverseDocs)] },
+      options,
+    ),
   );
   upsertRun(paths.runHistory, run);
   if (run.mode !== 'full-loop') return;
@@ -325,15 +371,23 @@ async function postProcess(
   upsertRun(paths.runHistory, run);
   const { md } = writeQcdReport(paths, config, run.runId);
   log.info(`QCD report: ${rel(paths.root, md)}`);
+  // The report may only grow (the Interpretation section); qcd-comparison-report.json stays read-only.
+  const mdPath = rel(paths.root, md);
   run.postProcess.push(
-    await callCopilot(paths, config, {
-      id: 'post-qcd',
-      phase: 'qcd',
-      skills: [SKILLS.qcd],
-      prompt: buildQcdPrompt(paths, config, md),
-      workDir,
-      dryRun,
-    }),
+    await guardedCall(
+      paths,
+      config,
+      {
+        id: 'post-qcd',
+        phase: 'qcd',
+        skills: [SKILLS.qcd],
+        prompt: buildQcdPrompt(paths, config, md),
+        workDir,
+        dryRun,
+      },
+      { allowed: [mdPath], appendOnly: [mdPath] },
+      options,
+    ),
   );
 }
 
@@ -476,7 +530,11 @@ export async function runFullLoop(
     upsertRun(paths.runHistory, run);
     if (!options.skipPost) {
       log.step('Post-process: reverse design documents and QCD report');
-      await postProcess(paths, config, run, path.join(workDir, 'post'), options.dryRun);
+      await postProcess(paths, config, run, path.join(workDir, 'post'), {
+        dryRun: options.dryRun,
+        revert: options.revert && config.loop.autoRevertBoundaryViolations && !options.dryRun,
+        ...(dependencies ? { dependencies } : {}),
+      });
     }
   } catch (error) {
     run.result = 'error';
@@ -514,13 +572,12 @@ export async function runReverseDoc(
     postProcess: [],
   };
   try {
-    await postProcess(
-      paths,
-      config,
-      run,
-      path.join(paths.outputs.telemetry, runId, 'post'),
-      options.dryRun,
-    );
+    const dependencies = DependencyGuard.fromConfig(paths.root, config);
+    await postProcess(paths, config, run, path.join(paths.outputs.telemetry, runId, 'post'), {
+      dryRun: options.dryRun,
+      revert: options.revert && config.loop.autoRevertBoundaryViolations && !options.dryRun,
+      ...(dependencies ? { dependencies } : {}),
+    });
     run.result = 'passed';
   } catch (error) {
     run.result = 'error';

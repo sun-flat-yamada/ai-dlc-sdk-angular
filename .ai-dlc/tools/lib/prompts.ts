@@ -165,7 +165,7 @@ Apply ${skillRef(paths, SKILLS.reverseDoc)}. Read it completely first.
 - Output directory: \`${rel(paths.root, paths.outputs.reverseDocs)}/\`
 - Document language: **${config.output.language === 'ja' ? 'Japanese' : 'English'}** (identifiers, paths and code stay as they are).
 
-Write only inside the output directory. Do not modify source code.
+Write only inside the output directory. Do not modify source code. Any change elsewhere is restored automatically and reported as a boundary violation.
 `;
 }
 
@@ -175,7 +175,7 @@ export function buildQcdPrompt(paths: AidlcPaths, config: AidlcConfig, reportFil
 Apply ${skillRef(paths, SKILLS.qcd)}. Read it completely first.
 
 The numbers are already calculated in \`${rel(paths.root, reportFile)}\` and \`${rel(paths.root, reportFile.replace(/\.md$/, '.json'))}\`.
-Add the "Interpretation" section the skill describes to the Markdown report. Never change a calculated number.
+Append the "Interpretation" section the skill describes to the end of the Markdown report. Never change a calculated number: the existing content and the JSON are checked, and any other change is restored and reported as a boundary violation.
 Language: **${config.output.language === 'ja' ? 'Japanese' : 'English'}**.
 `;
 }

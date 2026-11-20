@@ -28,6 +28,8 @@ export interface CopilotCallRecord {
   estimatedOutputTokens: number;
   usage?: UsageRecord;
   changedFiles: string[];
+  /** Post-process only: changes outside the paths the call may write (restored unless --no-revert). */
+  violations?: GateFailure[];
 }
 
 export type GateName = 'inputs' | 'boundary' | 'build' | 'lint' | 'unit' | 'subsystem';
