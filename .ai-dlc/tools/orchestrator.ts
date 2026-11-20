@@ -434,6 +434,8 @@ export async function runFullLoop(
         revertViolations:
           options.revert && config.loop.autoRevertBoundaryViolations && !options.dryRun,
         baseline: baseline.sha,
+        // Gate 4 trusts this in-memory hash, never files the agent can rewrite.
+        expectedCasesSha256: cases.casesSha256,
         echo: false,
       });
       if (options.dryRun && options.simulatePassAt === i) gates = simulatedPass(gates);

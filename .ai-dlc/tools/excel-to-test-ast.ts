@@ -307,8 +307,8 @@ export function findWorkbooks(dir: string): string[] {
     .map((f) => path.join(dir, f));
 }
 
-/** Parses every workbook and writes `subsystem-cases.json` / `.md`. */
-export async function convertWorkbooks(
+/** Parses every workbook in memory (nothing is written). */
+export async function parseWorkbooks(
   paths: AidlcPaths,
   config: AidlcConfig,
   inputs: string[] = findWorkbooks(paths.inputs.subsystemTests),
@@ -348,6 +348,16 @@ export async function convertWorkbooks(
     });
   }
   file.casesSha256 = hashCases(file.cases);
+  return file;
+}
+
+/** Parses every workbook and writes `subsystem-cases.json` / `.md`. */
+export async function convertWorkbooks(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  inputs: string[] = findWorkbooks(paths.inputs.subsystemTests),
+): Promise<SubsystemCaseFile> {
+  const file = await parseWorkbooks(paths, config, inputs);
   writeJsonAtomic(paths.subsystemCases, file);
   mkdirSync(paths.outputs.generatedTests, { recursive: true });
   writeFileSync(

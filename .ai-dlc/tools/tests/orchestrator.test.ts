@@ -1,9 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { baselineFile, recordBaseline } from '../boundary-guard.js';
 import { convertWorkbooks } from '../excel-to-test-ast.js';
 import { parseOptions, runFullLoop, runReverseDoc } from '../orchestrator.js';
 import { loadConfig, resolvePaths } from '../lib/config.js';
+import { SubsystemCaseFile } from '../lib/subsystem-cases.js';
 import { readRunHistory } from '../lib/telemetry.js';
 import { buildSampleWorkbook } from '../samples/generate-sample-excel.js';
 import { commitAll, copyHarness, git, tempRepo, write } from './helpers.js';
@@ -214,6 +216,63 @@ describe('runFullLoop (dry-run)', () => {
     const gate = await runSubsystemGate(env.paths, env.config);
     expect(gate).toMatchObject({ status: 'fail', summary: 'Expected values were modified' });
     expect(git(env.dir, 'status', '--porcelain')).toBe('');
+  });
+
+  /** Rewrites one expected value and recomputes the file's own hash, as an agent could with `node`. */
+  async function tamperWithRecomputedHash(file: string) {
+    const { hashCases } = await import('../lib/subsystem-cases.js');
+    const data = JSON.parse(readFileSync(file, 'utf8')) as SubsystemCaseFile;
+    data.cases = JSON.parse(
+      JSON.stringify(data.cases).replace('保存しました', '保存'),
+    ) as typeof data.cases;
+    data.casesSha256 = hashCases(data.cases);
+    writeFileSync(file, JSON.stringify(data), 'utf8');
+  }
+
+  it('detects expected values rewritten together with their hash after baseline.json is deleted', async () => {
+    const env = await prepare();
+    cleanup = env.cleanup;
+    const cases = await convertWorkbooks(env.paths, env.config);
+    await recordBaseline(env.paths, 'HEAD', cases.casesSha256);
+    const { runSubsystemGate } = await import('../gate-runner.js');
+    rmSync(baselineFile(env.paths));
+    await tamperWithRecomputedHash(env.paths.subsystemCases);
+    // Standalone gate: the Excel workbooks are the source of truth.
+    const standalone = await runSubsystemGate(env.paths, env.config);
+    expect(standalone).toMatchObject({ status: 'fail', summary: 'Expected values were modified' });
+    expect(standalone.failures.map((f) => f.message).join('\n')).toMatch(/Excel workbooks/);
+    // Inside the loop: the in-memory hash of the orchestrator, and baseline.json must exist.
+    const inLoop = await runSubsystemGate(env.paths, env.config, false, cases.casesSha256);
+    const messages = inLoop.failures.map((f) => f.message).join('\n');
+    expect(inLoop.status).toBe('fail');
+    expect(messages).toMatch(/start of the run/);
+    expect(messages).toMatch(/baseline\.json is missing/);
+  });
+
+  it('detects expected values and baseline.json rewritten consistently', async () => {
+    const env = await prepare();
+    cleanup = env.cleanup;
+    const cases = await convertWorkbooks(env.paths, env.config);
+    await tamperWithRecomputedHash(env.paths.subsystemCases);
+    const forged = (JSON.parse(readFileSync(env.paths.subsystemCases, 'utf8')) as SubsystemCaseFile)
+      .casesSha256;
+    await recordBaseline(env.paths, 'HEAD', forged);
+    const { runSubsystemGate } = await import('../gate-runner.js');
+    const gate = await runSubsystemGate(env.paths, env.config, false, cases.casesSha256);
+    expect(gate).toMatchObject({ status: 'fail', summary: 'Expected values were modified' });
+    const messages = gate.failures.map((f) => f.message).join('\n');
+    expect(messages).toMatch(/Excel workbooks/);
+    expect(messages).toMatch(/start of the run/);
+  });
+
+  it('accepts untouched cases', async () => {
+    const env = await prepare();
+    cleanup = env.cleanup;
+    const cases = await convertWorkbooks(env.paths, env.config);
+    await recordBaseline(env.paths, 'HEAD', cases.casesSha256);
+    const { verifyCaseIntegrity } = await import('../gate-runner.js');
+    const onDisk = JSON.parse(readFileSync(env.paths.subsystemCases, 'utf8')) as SubsystemCaseFile;
+    expect(await verifyCaseIntegrity(env.paths, env.config, onDisk, cases.casesSha256)).toEqual([]);
   });
 });
 

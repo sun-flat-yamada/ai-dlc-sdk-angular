@@ -61,7 +61,11 @@ violation is reported to the next iteration, which re-applies the change as a pu
 
 Gate 4 passes only when:
 
-- `subsystem-cases.json` matches the hash recorded at the start of the run (expected values unchanged),
+- the cases in `subsystem-cases.json` are exactly the cases re-parsed from the Excel workbooks in
+  `.ai-dlc/inputs/subsystem-tests/` and, inside the loop, the hash the orchestrator computed at the start
+  of the run and keeps in memory (expected values unchanged). Files under `.ai-dlc/outputs/` — including
+  the file's own `casesSha256` and `baseline.json` — are writable by the agent and git-ignored, so they
+  are never the only reference; inside the loop a missing or modified `baseline.json` also fails the gate,
 - every case ID has at least one test whose title contains `[<case ID>]`, and all of them passed,
 - no test is skipped, no test refers to an unknown case ID,
 - the pass rate is ≥ `gates.subsystem.minPassRate` (default 1.0).
