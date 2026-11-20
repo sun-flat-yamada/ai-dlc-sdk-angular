@@ -5,7 +5,7 @@ import { mergePackageJson, planInstall, runInstall } from '../install.js';
 import { HumanBaseline, calculateQcd, renderQcdMarkdown, selectRun } from '../qcd-calculator.js';
 import { parseConfig } from '../lib/config.js';
 import { RunRecord } from '../lib/telemetry.js';
-import { REPO_ROOT, tempRepo, write } from './helpers.js';
+import { REPO_ROOT, git, tempRepo, write } from './helpers.js';
 
 const config = parseConfig(
   readFileSync(path.join(REPO_ROOT, '.ai-dlc/config/aidlc.config.yaml'), 'utf8'),
@@ -221,7 +221,18 @@ describe('install', () => {
     expect(readFileSync(path.join(repo.dir, '.gitignore'), 'utf8')).toContain(
       '/.ai-dlc/outputs/**',
     );
+    // The Vitest cache of the harness tests must never be committed (issue #7).
+    write(repo.dir, '.ai-dlc/tools/node_modules/.vite/vitest/results.json', '{}');
+    expect(
+      git(repo.dir, 'check-ignore', '.ai-dlc/tools/node_modules/.vite/vitest/results.json'),
+    ).toBe('.ai-dlc/tools/node_modules/.vite/vitest/results.json\n');
     expect(existsSync(path.join(repo.dir, '.devcontainer/init-firewall.sh'))).toBe(true);
+  });
+
+  it('ignores the Vitest cache of the harness tests in this repository', () => {
+    const file = '.ai-dlc/tools/node_modules/.vite/vitest/results.json';
+    expect(git(REPO_ROOT, 'check-ignore', '--no-index', file)).toBe(`${file}\n`);
+    expect(git(REPO_ROOT, 'ls-files', '.ai-dlc/tools/node_modules')).toBe('');
   });
 
   it('refuses a target without angular.json', () => {

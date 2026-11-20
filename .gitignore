@@ -14,6 +14,8 @@
 # Dependencies
 # =================================================================
 /node_modules
+# Vitest cache of the harness tests (vitest.config.ts uses .ai-dlc/tools as its root)
+/.ai-dlc/tools/node_modules/
 npm-debug.log*
 yarn-error.log
 
