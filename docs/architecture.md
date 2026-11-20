@@ -46,7 +46,12 @@ flowchart TB
    - All `pass` → stop. Otherwise write `iter-i/gate-results.md` and continue.
 3. **Finish** — `final-quality-gate.md`; `unresolved-issues.md` when N was reached; change statistics per zone.
 4. **Post-process** — facts → templates (`reverse-docs/*.md`) → Copilot completes them (skill 05);
-   QCD report → Copilot adds the interpretation (skill 06).
+   QCD report → Copilot adds the interpretation (skill 06). These calls run after the final gate, so each
+   one is guarded mechanically (`lib/post-process-guard.ts`): the git-visible working tree, `HEAD`, every
+   file under `.ai-dlc/outputs/` and `node_modules/` are snapshotted before the call. The reverse-doc call
+   may write only `reverse-docs/`; the QCD call may only append to `qcd-comparison-report.md`. Anything
+   else is restored to its state from just before the call (the gated implementation stays) and recorded
+   in `postProcess[].violations` of the run history. `--no-revert` reports without restoring.
 
 `skipped` never counts as `pass`. In dry-run mode gates 2-4 are skipped, so the loop runs exactly N times and
 ends as `exhausted` — that exercises the bound and the reports. `--simulate-pass-at k` exercises the early exit.
@@ -86,7 +91,7 @@ runs[]: runId, mode, startedAt, endedAt, dryRun, maxIterations, baseline, result
   iterations[]: index, copilotCalls[], gates[], passed
     copilotCalls[]: skills, phase, duration, promptChars, estimated tokens, usage {aiCredits, premiumRequests, tokens}, changedFiles
     gates[]: gate, status, summary, failures[], metrics {coverage*, passRate, warnings, …}
-  postProcess[]: copilotCalls of skills 05 / 06
+  postProcess[]: copilotCalls of skills 05 / 06, violations[] outside their allowed outputs
 ```
 
 ## Safety model

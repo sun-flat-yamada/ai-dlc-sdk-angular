@@ -34,7 +34,9 @@ following before running `npm run aidlc:run` without `--dry-run`.
    definition (`.devcontainer/**`), so the agent cannot weaken its own sandbox for the next run.
    It is a safety net for the code base; the sandbox is what contains the commands. Git-ignored
    dependencies (`node_modules/`) are fingerprinted in memory before the agent runs; any change fails
-   Gate 1 and they are reinstalled from `package-lock.json` (`loop.dependencyGuard`).
+   Gate 1 and they are reinstalled from `package-lock.json` (`loop.dependencyGuard`). The post-process
+   Copilot calls (reverse docs, QCD commentary), which run after the final gate, are guarded the same
+   way: changes outside their output files are restored and recorded as violations.
 5. **Confidential inputs**: requirements, device API specifications and test specifications are sent to
    the model as context. Check your organization's Copilot policies (content exclusion, data retention)
    before using real documents. Generated outputs are git-ignored by default.
