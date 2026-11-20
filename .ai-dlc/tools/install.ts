@@ -47,6 +47,8 @@ const GITIGNORE_BLOCK = `
 !/.ai-dlc/outputs/**/.gitkeep
 /test-results/
 /playwright-report/
+# Vitest cache of the AI-DLC harness tests
+/.ai-dlc/tools/node_modules/
 # Extra CA certificates for the AI-DLC sandbox image (local only)
 /.devcontainer/certs/*
 !/.devcontainer/certs/README.md
