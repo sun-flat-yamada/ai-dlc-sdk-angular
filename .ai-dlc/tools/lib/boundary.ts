@@ -73,6 +73,7 @@ export class BoundaryClassifier {
 export type ViolationRule =
   | 'immutable-changed'
   | 'extensible-lines-removed'
+  | 'extensible-binary-change'
   | 'extensible-file-removed'
   | 'out-of-scope'
   | 'unclassified';
@@ -101,6 +102,8 @@ const MESSAGES: Record<ViolationRule, string> = {
   'extensible-lines-removed':
     'Extensible zone is append-only: existing lines were changed or removed. Only add new entries.',
   'extensible-file-removed': 'Extensible zone: existing files must not be deleted or renamed.',
+  'extensible-binary-change':
+    'Extensible zone is append-only, but git could not count the changed lines (binary content). Keep the file plain text and only add new entries.',
   'out-of-scope': 'Ignored zone: unrelated to this change and must not be touched.',
   unclassified: 'Path matches no zone in boundary-policy.yaml and unclassified changes are denied.',
 };
@@ -154,8 +157,13 @@ function ruleFor(
     case 'extensible':
       if (change.status === 'deleted' || change.status === 'renamed')
         return 'extensible-file-removed';
-      if (change.status === 'modified' && (change.deleted ?? 0) > 0)
-        return 'extensible-lines-removed';
+      if (change.status === 'modified') {
+        // No line counts means git treated the change as binary: it cannot be shown to be
+        // append-only, so fail closed (issue #14).
+        if (change.added === undefined || change.deleted === undefined)
+          return 'extensible-binary-change';
+        if (change.deleted > 0) return 'extensible-lines-removed';
+      }
       return undefined;
     case 'unclassified':
       return unclassified === 'deny' ? 'unclassified' : undefined;

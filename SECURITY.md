@@ -21,7 +21,10 @@ following before running `npm run aidlc:run` without `--dry-run`.
 1. **Tool permissions** are set in `.ai-dlc/config/aidlc.config.yaml` → `copilot.args`.
    The default allows file writes and `npm` / `npx` / `node` / read-only `git` commands, and denies
    `git push`, `git commit`, `git reset`, `git checkout`, `git clean` and `git rebase`. Deny rules win over
-   allow rules. Review them for your environment; do not replace them with `--allow-all` / `--yolo`.
+   allow rules, **but they only prevent accidents**: as long as `node`, `npm` and `npx` are allowed, the
+   agent can run any command through them (`node -e "require('child_process').execSync('git commit …')"`).
+   What actually contains the agent is the sandbox (3) and the guards (4). Review the rules for your
+   environment; do not replace them with `--allow-all` / `--yolo`.
 2. **`--trust-folder`** trusts the repository configuration (skills, instructions) for that one session.
    Run the harness only on repositories whose `.github/` and `AGENTS.md` you control.
 3. **Sandbox**: every SDK operation runs in the bundled dev container ([docs/sandbox.md](docs/sandbox.md)):
@@ -32,15 +35,23 @@ following before running `npm run aidlc:run` without `--dry-run`.
    (`sandbox.enforce: strict`); do not lower that setting for real runs.
 4. **Boundary guard** reverts changes to protected paths after each iteration, including the sandbox
    definition (`.devcontainer/**`), so the agent cannot weaken its own sandbox for the next run.
-   It is a safety net for the code base; the sandbox is what contains the commands. Git-ignored
+   It is a safety net for the code base; the sandbox is what contains the commands. The guard does not
+   trust `.git/`, which the agent can write: git runs without replace objects, system / global config,
+   hooks or fsmonitor, the working tree is compared through a temporary index, and `.git/config`,
+   `.git/hooks/`, `.git/info/` and every ref (HEAD, branches, tags, stash, `refs/replace/`) are
+   fingerprinted in memory before the agent runs; Gate 1 restores and reports any change. Git-ignored
    dependencies (`node_modules/`) are fingerprinted in memory before the agent runs; any change fails
    Gate 1 and they are reinstalled from `package-lock.json` (`loop.dependencyGuard`). The post-process
    Copilot calls (reverse docs, QCD commentary), which run after the final gate, are guarded the same
    way: changes outside their output files are restored and recorded as violations.
-5. **Confidential inputs**: requirements, device API specifications and test specifications are sent to
+5. **Git on the host**: the repository, including `.git/`, is shared with the host. The sandbox mounts
+   `.git/hooks` and `.git/config` read-only, because hooks, `core.fsmonitor`, aliases and filter / diff
+   drivers would run on the host with your credentials. Before you use git on the host after an agent
+   run, check `git config --local --list`, `.git/hooks/`, `.git/info/` and `git replace -l`.
+6. **Confidential inputs**: requirements, device API specifications and test specifications are sent to
    the model as context. Check your organization's Copilot policies (content exclusion, data retention)
    before using real documents. Generated outputs are git-ignored by default.
-6. **Secrets**: never place tokens in the inputs or configuration. Authenticate Copilot CLI inside the
+7. **Secrets**: never place tokens in the inputs or configuration. Authenticate Copilot CLI inside the
    sandbox with `copilot login`, or pass a fine-grained token with the _Copilot Requests_ permission
    only via `COPILOT_GITHUB_TOKEN`. Do not forward SSH agents or git credential helpers into the
    sandbox (the harness refuses to run when it detects them).

@@ -19,6 +19,7 @@ import {
 import { AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { DependencyGuard } from './lib/dependency-guard.js';
 import { Git } from './lib/git.js';
+import { RepositoryGuard } from './lib/repository-guard.js';
 import { isMain, log, runCli } from './lib/cli.js';
 import { enforceSandbox } from './lib/sandbox.js';
 import { GateResult, writeJsonAtomic } from './lib/telemetry.js';
@@ -63,6 +64,11 @@ export interface GuardOptions {
   revert: boolean;
   /** Fingerprint of git-ignored directories (node_modules) captured before the agent ran. */
   dependencies?: DependencyGuard;
+  /**
+   * In-memory capture of `.git/` metadata and refs taken before the agent ran. Checked (and restored)
+   * first, so that the boundary check below reads a trusted `.git/`.
+   */
+  repository?: RepositoryGuard;
 }
 
 /** Runs the guard and returns the report plus a gate result for the loop. */
@@ -73,6 +79,7 @@ export async function runBoundaryGuard(
   const started = Date.now();
   const git = new Git(paths.root);
   const classifier = new BoundaryClassifier(loadBoundaryPolicy(paths.boundaryPolicy));
+  const repo = options.repository ? await options.repository.check(options.revert) : [];
   const changes = await git.changesSince(options.baseline);
   const report = evaluateChanges(classifier, options.baseline, changes);
   const reverted: string[] = [];
@@ -84,10 +91,16 @@ export async function runBoundaryGuard(
     }
   }
   const deps = options.dependencies ? await options.dependencies.check(options.revert) : undefined;
-  const failures: GateResult['failures'] = report.violations.map((v) => ({
-    where: v.from ? `${v.from} -> ${v.path}` : v.path,
-    message: `[${v.zone}/${v.rule}] ${v.message}${options.revert ? ' (reverted to baseline)' : ''}`,
+  const failures: GateResult['failures'] = repo.map((v) => ({
+    where: v.where,
+    message: `[git/${v.rule}] ${v.message}`,
   }));
+  failures.push(
+    ...report.violations.map((v) => ({
+      where: v.from ? `${v.from} -> ${v.path}` : v.path,
+      message: `[${v.zone}/${v.rule}] ${v.message}${options.revert ? ' (reverted to baseline)' : ''}`,
+    })),
+  );
   for (const c of deps?.changed ?? []) {
     failures.push({
       where: c.path,
@@ -98,7 +111,7 @@ export async function runBoundaryGuard(
       }`,
     });
   }
-  const violations = report.violations.length + (deps?.changed.length ?? 0);
+  const violations = repo.length + report.violations.length + (deps?.changed.length ?? 0);
   const gate: GateResult = {
     gate: 'boundary',
     status: violations === 0 ? 'pass' : 'fail',
@@ -112,6 +125,7 @@ export async function runBoundaryGuard(
       changedPaths: report.changes.length,
       violations,
       ...(deps ? { dependencyViolations: deps.changed.length } : {}),
+      ...(options.repository ? { repositoryViolations: repo.length } : {}),
     },
   };
   return { report, gate, reverted };

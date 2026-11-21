@@ -4,7 +4,7 @@
  *
  * Before each call the guard snapshots
  *   - the git-visible working tree as a tree object (temporary index, nothing is committed),
- *   - HEAD,
+ *   - `.git/` metadata (config, hooks, info) and every ref including HEAD (repository guard),
  *   - the content of every file under `.ai-dlc/outputs/` (git-ignored, so invisible to git) except
  *     the paths the call may write,
  *   - git-ignored dependencies (`node_modules/`) through the dependency guard.
@@ -12,21 +12,12 @@
  * state from just before the call (not to the run baseline: the gated implementation stays).
  */
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { AidlcPaths } from './config.js';
 import { DependencyGuard } from './dependency-guard.js';
-import { exec } from './exec.js';
 import { Git } from './git.js';
+import { RepositoryGuard } from './repository-guard.js';
 import { GateFailure } from './telemetry.js';
 
 export interface PostProcessScope {
@@ -53,24 +44,13 @@ function listFiles(root: string, dir: string): string[] {
 }
 
 /** Snapshot of the whole git-visible working tree as a tree object id (uses a temporary index). */
-export async function snapshotWorktree(root: string): Promise<string> {
-  const dir = mkdtempSync(path.join(tmpdir(), 'aidlc-index-'));
-  try {
-    const env = { GIT_INDEX_FILE: path.join(dir, 'index') };
-    for (const args of [['add', '-A', '--', '.'], ['write-tree']]) {
-      const r = await exec(['git', ...args], { cwd: root, env });
-      if (r.exitCode !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.output}`);
-      if (args[0] === 'write-tree') return r.output.trim();
-    }
-    throw new Error('unreachable');
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+export function snapshotWorktree(root: string): Promise<string> {
+  return new Git(root).snapshotTree();
 }
 
 export class PostProcessGuard {
   private tree = '';
-  private head = '';
+  private readonly repository: RepositoryGuard;
   private outputs = new Map<string, Buffer>();
   private appendOnly = new Map<string, Buffer | undefined>();
 
@@ -78,16 +58,17 @@ export class PostProcessGuard {
     private readonly paths: AidlcPaths,
     private readonly scope: PostProcessScope,
     private readonly dependencies?: DependencyGuard,
-  ) {}
+  ) {
+    this.repository = new RepositoryGuard(paths.root);
+  }
 
   private outputsDir(): string {
     return toPosix(path.relative(this.paths.root, this.paths.outputs.root));
   }
 
   async capture(): Promise<void> {
-    const git = new Git(this.paths.root);
+    await this.repository.capture();
     this.tree = await snapshotWorktree(this.paths.root);
-    this.head = await git.head().catch(() => '');
     this.outputs = new Map(
       listFiles(this.paths.root, this.outputsDir())
         .filter((f) => !within(f, this.scope.allowed))
@@ -109,12 +90,10 @@ export class PostProcessGuard {
     const failures: GateFailure[] = [];
     const note = revert ? ' (restored)' : '';
 
-    const head = await git.head().catch(() => '');
-    if (this.head && head !== this.head) {
-      if (revert) await git.run(['reset', '-q', '--soft', this.head]);
+    for (const v of await this.repository.check(revert)) {
       failures.push({
-        where: 'HEAD',
-        message: `Post-process moved HEAD to ${head.slice(0, 12)}; the harness owns version control.${note}`,
+        where: v.where,
+        message: `Post-process: ${v.message}`,
       });
     }
 
@@ -124,10 +103,8 @@ export class PostProcessGuard {
       for (const file of diff.split(/\r?\n/).filter(Boolean)) {
         if (within(file, this.scope.allowed)) continue;
         if (revert) {
-          const existed = await exec(['git', 'cat-file', '-e', `${this.tree}:${file}`], {
-            cwd: root,
-          });
-          if (existed.exitCode === 0) {
+          const existed = await git.run(['cat-file', '-t', `${this.tree}:${file}`], true);
+          if (existed.trim() === 'blob') {
             await git.run(['restore', `--source=${this.tree}`, '--worktree', '--', file]);
           } else {
             rmSync(path.join(root, file), { force: true });

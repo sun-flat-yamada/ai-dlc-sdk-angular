@@ -99,6 +99,8 @@ runs[]: runId, mode, startedAt, endedAt, dryRun, maxIterations, baseline, result
 See [SECURITY.md](../SECURITY.md) and [sandbox.md](sandbox.md). In short: every command runs in the
 bundled sandbox (dev container: non-root, no-new-privileges, default-deny egress firewall, no host
 credentials) and the harness refuses to run outside it (`lib/sandbox.ts`); explicit allow / deny tool
-rules for Copilot CLI, no git write commands for the agent, mechanical boundary revert (the sandbox
-definition itself is `immutable`), protected inputs and expected values. A dry-run reports boundary
+rules for Copilot CLI (accident prevention only: `node` / `npm` / `npx` can run anything), mechanical
+boundary revert (the sandbox definition itself is `immutable`), an in-memory capture of `.git/`
+metadata and refs that Gate 1 restores (`lib/repository-guard.ts`), protected inputs and expected
+values. A dry-run reports boundary
 violations but never reverts, because no agent ran.
