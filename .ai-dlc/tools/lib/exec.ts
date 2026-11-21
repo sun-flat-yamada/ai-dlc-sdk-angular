@@ -17,6 +17,8 @@ export interface ExecOptions {
   echo?: boolean;
   /** Keep only the last N characters of output in memory. */
   maxOutputChars?: number;
+  /** Written to the child's stdin (otherwise stdin is closed). */
+  input?: string;
 }
 
 /**
@@ -36,7 +38,7 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
     const child = spawn(file, args, {
       cwd: options.cwd,
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1', ...options.env },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
     const append = (chunk: Buffer) => {
@@ -49,6 +51,7 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
         output = output.slice(output.length - max);
       }
     };
+    if (options.input !== undefined) child.stdin?.end(options.input);
     child.stdout?.on('data', append);
     child.stderr?.on('data', append);
     const timer =

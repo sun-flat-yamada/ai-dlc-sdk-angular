@@ -49,13 +49,14 @@ token with the _Copilot Requests_ permission only. Host credentials are never mo
 
 | Layer | Mechanism | Defined in |
 | --- | --- | --- |
-| File system | Only the repository is bind-mounted (`/workspace`). No home directory, SSH keys, cloud credentials or Docker socket. `node_modules` lives in a named volume, so Linux binaries never reach the host. | `devcontainer.json` (`workspaceMount`, `mounts`) |
+| File system | Only the repository is bind-mounted (`/workspace`). No home directory, SSH keys, cloud credentials or Docker socket. `node_modules` lives in a named volume, so Linux binaries never reach the host. `.git/hooks` and `.git/config` are mounted read-only: they run on the host with your credentials the next time you use git there. | `devcontainer.json` (`workspaceMount`, `mounts`) |
 | Privileges | Processes run as `node`. No `sudo` in the image, `--security-opt=no-new-privileges`, `--cap-drop=ALL` (only `NET_ADMIN`, `NET_RAW`, `CHOWN`, `SETUID`, `SETGID` remain, used by the root entrypoint), `--pids-limit`. | `Dockerfile`, `devcontainer.json` (`runArgs`) |
-| Network | Default-deny egress firewall (iptables + ipset) applied **as root by the entrypoint on every container start**, before any user process. Only DNS and the hosts in `allowed-domains.txt` (+ GitHub's published ranges) are reachable; everything else is rejected. Verified at start (a non-listed host must fail). | `entrypoint.sh`, `init-firewall.sh`, `allowed-domains.txt` |
+| Network | Default-deny egress firewall (iptables + ipset) applied **as root by the entrypoint on every container start**, before any user process. Only DNS to the configured resolvers and the hosts in `allowed-domains.txt` (+ GitHub's published ranges) are reachable; everything else is rejected. Verified at start (a non-listed host and port 53 of a non-resolver must fail). | `entrypoint.sh`, `init-firewall.sh`, `allowed-domains.txt` |
 | Tools | Copilot CLI and Playwright Chromium are baked into the image at pinned versions, so the agent never downloads tools at run time. | `Dockerfile`, `devcontainer.json` (`build.args`) |
 | Credentials | SSH agent forwarding is cleared, git uses no credential helper, VS Code git authentication is disabled. | `devcontainer.json`, `post-create.sh` |
 | Harness | Every `aidlc:*` command (except `aidlc:install`) checks the sandbox before doing anything and refuses to run outside it. | `.ai-dlc/tools/lib/sandbox.ts` |
 | Code base | The boundary guard marks `.devcontainer/**` and `scripts/sandbox.ts` as `immutable`; the agent cannot weaken its own sandbox. | `.ai-dlc/config/boundary-policy.yaml` |
+| Git metadata | The harness runs git with replace objects, system / global config, hooks and fsmonitor switched off, compares a temporary-index snapshot of the working tree with the baseline, and fingerprints `.git/config`, `.git/hooks/`, `.git/info/` and every ref (HEAD, branches, tags, `refs/replace/`, `refs/stash`) in memory before the agent runs. Gate 1 restores and reports any change. | `.ai-dlc/tools/lib/git.ts`, `.ai-dlc/tools/lib/repository-guard.ts` |
 
 ## Enforcement by the harness
 
@@ -107,10 +108,18 @@ the sandbox check, the harness dry-run and the Playwright E2E tests.
 
 ## Known limits
 
-- DNS (port 53) is allowed so that host names can be resolved; DNS tunnelling is not blocked.
+- DNS (port 53) is allowed only to the resolvers in the container's `/etc/resolv.conf` (and the
+  upstream servers of Docker's embedded DNS), so port 53 is not a channel to arbitrary hosts. DNS
+  tunnelling through those resolvers is still possible.
 - Allowed hosts are resolved to IP addresses when the container starts. CDNs rotate addresses;
   restart the container (`npm run sandbox -- down && npm run sandbox -- up`) if a host stops working.
 - With a proxy, the proxy decides what is reachable.
+- The rest of `.git/` (objects, refs, `info/`, the index) stays writable, because git needs it. The
+  harness detects and restores changes there (Gate 1), but only during a run. Before you use git on
+  the host after an agent run, check that `git config --local --list`, `.git/hooks/` and
+  `.git/info/` contain nothing you did not put there, and that `git replace -l` is empty.
+- The read-only mounts need a regular clone where `.git` is a directory. In a `git worktree` (where
+  `.git` is a file) remove the two `.git/…` entries from `mounts` and keep the check above in mind.
 - A container shares the host kernel. For stronger isolation run Docker inside a VM (Docker Desktop
   does this on Windows and macOS) or use a dedicated, disposable runner.
 - VS Code may still inject its own credential helper when you attach with VS Code; the harness then

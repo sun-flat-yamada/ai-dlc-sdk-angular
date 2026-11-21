@@ -45,7 +45,12 @@
     // Linux node_modules stay in the container (never on the host file system).
     "source=aidlc-node-modules-${devcontainerId},target=/workspace/node_modules,type=volume",
     // Copilot CLI login state survives rebuilds without touching the host home directory.
-    "source=aidlc-copilot-${devcontainerId},target=/home/node/.copilot,type=volume"
+    "source=aidlc-copilot-${devcontainerId},target=/home/node/.copilot,type=volume",
+    // .git/ is shared with the host. Hooks and config run there with the maintainer's credentials
+    // (core.hooksPath, core.fsmonitor, aliases, filter / diff drivers), so the sandbox cannot write
+    // them. Needs a regular clone (.git directory, not a worktree file). See docs/sandbox.md.
+    "source=${localWorkspaceFolder}/.git/hooks,target=/workspace/.git/hooks,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.git/config,target=/workspace/.git/config,type=bind,readonly"
   ],
   "containerEnv": {
     // Read by the harness (sandbox.kind); every aidlc:* command refuses to run without it.

@@ -77,13 +77,25 @@ if [ -n "${docker_dns_rules}" ]; then
   done <<<"${docker_dns_rules}"
 fi
 
-# Loopback (local dev server, Playwright) and DNS.
+# Loopback (local dev server, Playwright, Docker's embedded DNS at 127.0.0.11).
 iptables -A INPUT -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
-iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
-iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
-iptables -A INPUT -p udp --sport 53 -j ACCEPT
-iptables -A INPUT -p tcp --sport 53 -j ACCEPT
+
+# DNS: only to the resolvers the container is configured with, never to any host on port 53
+# (otherwise 53/tcp is a plain TCP channel to any server). Docker's embedded DNS lists the upstream
+# servers it forwards to in an "# ExtServers: [...]" comment; they are allowed as well.
+resolvers="$(
+  {
+    sed -n 's/^[[:space:]]*nameserver[[:space:]]\+\([0-9.]\+\)[[:space:]]*$/\1/p' /etc/resolv.conf
+    grep -i '^# *ExtServers:' /etc/resolv.conf | grep -oE '[0-9]+(\.[0-9]+){3}' || true
+  } | grep -vE '^127\.' | sort -u || true
+)"
+for ns in ${resolvers}; do
+  iptables -A OUTPUT -d "${ns}" -p udp --dport 53 -j ACCEPT
+  iptables -A OUTPUT -d "${ns}" -p tcp --dport 53 -j ACCEPT
+  log "allow DNS ${ns}"
+done
+[ -n "${resolvers}" ] || log "no external resolver in /etc/resolv.conf (loopback DNS only)"
 
 ipset create "${IPSET}" hash:net
 
@@ -159,6 +171,16 @@ if curl --noproxy '*' -fsS --max-time 5 -o /dev/null https://example.com 2>/dev/
   write_marker failed
   exit 1
 fi
+# Port 53 must not be a way out either: a TCP connection to a host that is not a resolver must fail.
+for probe in 1.1.1.1 9.9.9.9 208.67.222.222; do
+  grep -qxF "${probe}" <<<"${resolvers}" && continue
+  if timeout 5 bash -c "exec 3<>/dev/tcp/${probe}/53" 2>/dev/null; then
+    log "ERROR ${probe}:53/tcp is reachable — firewall verification failed"
+    write_marker failed
+    exit 1
+  fi
+  break
+done
 # Any HTTP status counts as reachable (api.github.com answers 403 when rate-limited).
 status="$(curl "${curl_proxy[@]}" -sS --max-time 10 -o /dev/null -w '%{http_code}' https://api.github.com/zen || true)"
 if [ "${status:-000}" = "000" ]; then

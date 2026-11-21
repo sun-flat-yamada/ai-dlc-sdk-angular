@@ -26,6 +26,7 @@ import {
   resolvePaths,
 } from './lib/config.js';
 import { DependencyGuard } from './lib/dependency-guard.js';
+import { RepositoryGuard } from './lib/repository-guard.js';
 import { exec, stripAnsi, tail } from './lib/exec.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import { enforceSandbox } from './lib/sandbox.js';
@@ -59,6 +60,8 @@ export interface GateRunOptions {
    * orchestrator before the agent ran. Checked by Gate 1; build caches are cleared before the gates.
    */
   dependencies?: DependencyGuard;
+  /** In-memory capture of `.git/` metadata and refs, checked and restored first by Gate 1. */
+  repository?: RepositoryGuard;
   echo?: boolean;
 }
 
@@ -394,6 +397,7 @@ export async function runGates(
           baseline,
           revert: options.revertViolations ?? false,
           ...(options.dependencies ? { dependencies: options.dependencies } : {}),
+          ...(options.repository ? { repository: options.repository } : {}),
         })
       ).gate;
     } else if (options.dryRun) {
