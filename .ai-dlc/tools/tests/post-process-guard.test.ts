@@ -97,7 +97,7 @@ describe('post-process boundary guard', () => {
       revert: false,
     });
     const where = run.postProcess[0]?.violations?.map((v) => v.where);
-    expect(where).toEqual(['HEAD', ROUTES]);
+    expect(where).toEqual(['HEAD', 'refs/heads/main', ROUTES]);
     expect(readFileSync(path.join(env.dir, ROUTES), 'utf8')).toContain('// x');
     expect(git(env.dir, 'rev-parse', 'HEAD').trim()).not.toBe(head);
   });

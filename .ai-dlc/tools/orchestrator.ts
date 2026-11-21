@@ -35,6 +35,7 @@ import {
 } from './lib/sandbox.js';
 import { DependencyGuard } from './lib/dependency-guard.js';
 import { Git } from './lib/git.js';
+import { RepositoryGuard } from './lib/repository-guard.js';
 import { PostProcessGuard, PostProcessScope } from './lib/post-process-guard.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import {
@@ -438,6 +439,9 @@ export async function runFullLoop(
   // git cannot see node_modules: fingerprint it now, in memory, before the agent can touch it.
   const dependencies = DependencyGuard.fromConfig(paths.root, config);
   dependencies?.capture();
+  // The agent can write .git/ through node/npm/npx: capture its metadata and refs the same way.
+  const repository = new RepositoryGuard(paths.root);
+  await repository.capture();
   log.info(
     `Baseline ${baseline.sha.slice(0, 12)} (${dirty.length ? `${dirty.length} pre-existing uncommitted change(s) count as changes` : 'clean tree'})`,
   );
@@ -495,6 +499,7 @@ export async function runFullLoop(
         // Gate 4 trusts this in-memory hash, never files the agent can rewrite.
         expectedCasesSha256: cases.casesSha256,
         ...(dependencies ? { dependencies } : {}),
+        repository,
         echo: false,
       });
       if (options.dryRun && options.simulatePassAt === i) gates = simulatedPass(gates);

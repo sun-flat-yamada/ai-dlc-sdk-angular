@@ -56,6 +56,8 @@ copilot:
     following the referenced skills in .github/skills/. Work autonomously until it is done.
   # Placeholders: {prompt} {promptFile} {model} {usageFile} {transcriptFile} {logDir}
   # Permission rules: `copilot help permissions`. Deny rules win over allow rules.
+  # The git deny rules only prevent accidents: node / npm / npx can run any command, git included.
+  # The sandbox and the guards (boundary, dependency and repository guard in Gate 1) contain the agent.
   args:
     - -p
     - '{prompt}'
