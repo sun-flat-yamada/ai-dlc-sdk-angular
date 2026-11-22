@@ -122,18 +122,19 @@ describe('calculateQcd', () => {
       defectDensityPerKloc: 4,
     });
     expect(r.quality.human.defectDensityPerKloc).toBe(2);
-    // AI: 15 credits * 6 + (4 + 4) h * 8000; human: 60 h * 10000
+    // AI: 15 credits * 6 + (4 + 4) h * 10000 (same rate as the human side); human: 60 h * 10000
     expect(r.cost.ai).toMatchObject({
       copilotCalls: 2,
       aiCredits: 15,
       aiCost: 90,
       humanHours: 8,
-      humanCost: 64000,
-      totalCost: 64090,
+      humanCost: 80000,
+      totalCost: 80090,
       tokensAreEstimated: false,
+      creditsAreIncomplete: false,
     });
     expect(r.cost.human.totalCost).toBe(600000);
-    expect(r.cost.reductionRate).toBeCloseTo((600000 - 64090) / 600000);
+    expect(r.cost.reductionRate).toBeCloseTo((600000 - 80090) / 600000);
     expect(r.delivery.ai).toMatchObject({ leadTimeHours: 2, iterations: 2, maxIterations: 5 });
     expect(r.delivery.reductionRate).toBeCloseTo(46 / 48);
   });
@@ -148,6 +149,20 @@ describe('calculateQcd', () => {
       expect(r.delivery.reductionRate).toBeNull();
       expect(renderQcdMarkdown(r, 'ja')).toContain('削減率は算出していません');
     }
+  });
+
+  it('withholds the cost reduction when a real call has no usage data (issue #23)', () => {
+    const { usage: _missing, ...crashed } = call('fix', 0);
+    const partial: RunRecord = {
+      ...run,
+      iterations: [run.iterations[0]!, { ...run.iterations[1]!, copilotCalls: [crashed] }],
+    };
+    const r = calculateQcd(partial, human, config);
+    expect(r.comparable).toBe(true);
+    expect(r.cost.ai.creditsAreIncomplete).toBe(true);
+    expect(r.cost.reductionRate).toBeNull();
+    expect(r.delivery.reductionRate).not.toBeNull();
+    expect(renderQcdMarkdown(r, 'en')).toContain('AI credits are incomplete');
   });
 
   it('renders Japanese and English reports', () => {

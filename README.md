@@ -44,7 +44,7 @@ flowchart LR
 | --- | --- |
 | HTML/CSS and OpenAPI do not say *which button calls which API* or *what the screen does on 503* — the AI guesses | **`ui-bindings.yaml`** binds design elements (`data-ui-id`) to API operations (`operationId`), request / response mapping, screen states and error handling; **Gate 0** checks it against the HTML, OpenAPI and Excel before any AI work |
 | The AI rewrites code it should only reuse | **Boundary policy** with five zones (`immutable`, `extensible` = append-only, `rebuildable`, `deletable`, `ignored`) enforced with `git diff` and automatic revert |
-| "Tests pass" is decided by the AI itself | The **final gate is the human Excel specification**: every case must have a passing Playwright test, expected values are hashed and protected, skipped tests fail the gate |
+| "Tests pass" is decided by the AI itself | The **final gate is the human Excel specification**: every case must have a passing Playwright test that verifiably checked each of its expectations, expected values are hashed and protected, skipped tests fail the gate |
 | The acceptance criteria are only checked at the very end, so the AI implements against a guess | **Test-first with the Excel specification**: the cases are an input of every development step — the change impact map traces requirement → case → file, the Playwright tests are written *before* the implementation, and unit tests name the case they cover. Gate 0 checks the cases' API notation against OpenAPI and that every screen requirement has a case |
 | The agent runs arbitrary commands with your credentials | Every operation runs in the bundled **sandbox** (dev container): non-root, no-new-privileges, default-deny egress firewall, no host credentials. The harness **refuses to run outside it** |
 | Unbounded agent loops | **Max N iterations** with structured failure feedback, then an unresolved-issues summary |
@@ -83,6 +83,9 @@ Results: `.ai-dlc/outputs/reports/` (final gate, unresolved issues, QCD), `.ai-d
 > Read [SECURITY.md](SECURITY.md) before a real run: the agent runs with tool permissions. Every `aidlc:*`
 > command refuses to run outside the sandbox (`sandbox.enforce: strict` in `aidlc.config.yaml`).
 
+After CI has passed, `npm run pr:finish -- <PR number>` (on the host) approves and rebase-merges a pull
+request (PR Auto-Pilot, on by default; [docs/pr-auto-merge.md](docs/pr-auto-merge.md)).
+
 ## Use it in your existing Angular repository
 
 ```bash
@@ -94,6 +97,14 @@ The installer copies the harness, skills, input skeleton and the sandbox (`.devc
 `scripts/sandbox.ts`), adds the `aidlc:*` / `sandbox` scripts and devDependencies, and never touches `src/`.
 Then run `npm run sandbox -- up` in the target. Then adapt `boundary-policy.yaml` and `.ai-dlc/references/` to your code base.
 See [docs/adoption-guide.md](docs/adoption-guide.md).
+
+## Input design (approach B: binding definitions)
+
+HTML/CSS describes *what is on the screen*, OpenAPI *what the device accepts*. What connects them — which
+element, event, API call, state and error handling belong together — is written in one place,
+`ui-bindings.yaml`, with the stable IDs of both sides (`data-ui-id` and `operationId`). The Excel cases
+refer to elements with `@ui-id` as well, so requirements, design, API and tests can be traced
+mechanically. Details and rationale: [docs/input-format.md](docs/input-format.md).
 
 ## Commands
 
@@ -127,8 +138,8 @@ See [docs/adoption-guide.md](docs/adoption-guide.md).
   outputs/       generated-tests/ reverse-docs/ telemetry/ reports/   (generated, git-ignored)
 .github/skills/  01-context-and-boundary … 06-qcd-benchmark (Agent Skills for Copilot CLI)
 src/             sample "existing" Angular 22 front-panel app (800×480, zoneless, signals)
-scripts/         sandbox.ts (host launcher of the sandbox), scan-secrets.ts
-docs/            sandbox, architecture, input format, adoption guide
+scripts/         sandbox.ts (host launcher of the sandbox), pr-autopilot.ts (PR Auto-Pilot), scan-secrets.ts
+docs/            sandbox, pr-auto-merge, architecture, input format, adoption guide
 ```
 
 ## Documentation

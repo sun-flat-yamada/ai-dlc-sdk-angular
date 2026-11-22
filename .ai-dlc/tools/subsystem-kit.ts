@@ -33,12 +33,10 @@ export { expect, test } from '@playwright/test';
  */
 function recordVerified(testCase: SubsystemCase, kind: ExpectationKind, index: number): void {
   try {
-    test
-      .info()
-      .annotations.push({
-        type: VERIFIED_ANNOTATION,
-        description: verifiedKey(testCase.id, kind, index),
-      });
+    test.info().annotations.push({
+      type: VERIFIED_ANNOTATION,
+      description: verifiedKey(testCase.id, kind, index),
+    });
   } catch {
     // Called outside a running Playwright test (unit tests of the kit): nothing to record.
   }

@@ -47,4 +47,4 @@ This repository has **two kinds of AI work**. Identify which one you are doing f
 | `.ai-dlc/references/` | Knowledge of the existing code base injected into prompts |
 | `.github/skills/` | Agent Skills 01-06 used by GitHub Copilot CLI |
 | `src/` | Sample "existing" Angular 22 front-panel application |
-| `docs/` | Architecture, input format, getting started, adoption guide |
+| `docs/` | Sandbox, PR Auto-Pilot (`pr-auto-merge.md`), architecture, input format, adoption guide |
