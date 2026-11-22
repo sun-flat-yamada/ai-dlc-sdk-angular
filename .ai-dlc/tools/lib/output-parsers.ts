@@ -1,4 +1,5 @@
 import type { GateFailure } from './telemetry.js';
+import { VERIFIED_ANNOTATION } from './subsystem-cases.js';
 import { stripAnsi } from './exec.js';
 
 const MAX_FAILURES = 40;
@@ -22,9 +23,11 @@ export function parseBuildErrors(output: string): GateFailure[] {
           break;
         }
       }
+      const message = esbuild[1]!.replace(/\s*\[plugin [^\]]+\]\s*$/, '').trim();
       failures.push({
-        where: where || 'build',
-        message: esbuild[1]!.replace(/\s*\[plugin [^\]]+\]\s*$/, '').trim(),
+        where:
+          where || (/exceeded maximum budget/i.test(message) ? 'angular.json budgets' : 'build'),
+        message,
       });
     }
   }
@@ -119,6 +122,8 @@ export interface PlaywrightTestResult {
   file: string;
   status: 'passed' | 'failed' | 'skipped' | 'timedOut' | 'interrupted' | 'flaky';
   error?: string;
+  /** `aidlc-verified` annotations: `<case ID>:<api|css|ui>:<index>` of every verified expectation. */
+  verified?: string[];
 }
 
 interface PwSuite {
@@ -129,8 +134,12 @@ interface PwSuite {
     file?: string;
     tests?: {
       status?: string;
-      annotations?: { type: string }[];
-      results?: { status?: string; error?: { message?: string } }[];
+      annotations?: { type: string; description?: string }[];
+      results?: {
+        status?: string;
+        error?: { message?: string };
+        annotations?: { type: string; description?: string }[];
+      }[];
     }[];
   }[];
   suites?: PwSuite[];
@@ -152,11 +161,19 @@ export function parsePlaywrightReport(json: string): PlaywrightTestResult[] {
         else status = (last?.status as PlaywrightTestResult['status']) ?? 'failed';
         if (status === 'passed' && t.status === 'unexpected') status = 'failed';
         const error = results.map((r) => r.error?.message).find(Boolean);
+        const verified = [
+          ...new Set(
+            [...(t.annotations ?? []), ...(last?.annotations ?? [])]
+              .filter((a) => a.type === VERIFIED_ANNOTATION && a.description)
+              .map((a) => a.description!),
+          ),
+        ];
         out.push({
           title: [...titles.slice(1), spec.title].join(' > '),
           file: spec.file ?? suite.file ?? '',
           status,
           ...(error ? { error: stripAnsi(error).split('\n').slice(0, 6).join('\n') } : {}),
+          ...(verified.length ? { verified } : {}),
         });
       }
     }

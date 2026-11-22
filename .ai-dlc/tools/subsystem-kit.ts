@@ -2,22 +2,47 @@
  * Helpers for Excel-derived subsystem tests (Playwright). Generated tests MUST use them so that
  * expected values always come from `subsystem-cases.json` (never copied into test code).
  *
- *   import { test, expect, loadCase, ui, mockDeviceApi, expectApiRequests, expectCss } from '../../../tools/subsystem-kit';
+ *   import { test, expect, loadCase, ui, mockDeviceApi, expectApiRequests, expectCss, expectUi } from '../../../tools/subsystem-kit';
  *
  *   const c = loadCase('ST-NET-003');
  *   test(`[${c.id}] ${c.title}`, async ({ page }) => {
  *     const api = await mockDeviceApi(page, c);
  *     await page.goto('/settings/network');
  *     await ui(page, 'save-button').click();
+ *     await expectUi(c, 0, () => expect(ui(page, 'status-message')).toHaveText('保存しました'));
  *     await expectApiRequests(api, c);
  *   });
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { expect, type Locator, type Page, type Request } from '@playwright/test';
-import type { SubsystemCase, SubsystemCaseFile } from './lib/subsystem-cases.js';
+import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
+import {
+  VERIFIED_ANNOTATION,
+  verifiedKey,
+  type ExpectationKind,
+  type SubsystemCase,
+  type SubsystemCaseFile,
+} from './lib/subsystem-cases.js';
 
 export { expect, test } from '@playwright/test';
+
+/**
+ * Records that an expectation of the case was verified. Gate 4 requires a record for every
+ * expectedApi / expectedCss / expectedUi entry of every case (issue #18). Generated tests must not
+ * write these annotations themselves (Gate 4 rejects test files that mention them).
+ */
+function recordVerified(testCase: SubsystemCase, kind: ExpectationKind, index: number): void {
+  try {
+    test
+      .info()
+      .annotations.push({
+        type: VERIFIED_ANNOTATION,
+        description: verifiedKey(testCase.id, kind, index),
+      });
+  } catch {
+    // Called outside a running Playwright test (unit tests of the kit): nothing to record.
+  }
+}
 
 const casesFile = fileURLToPath(
   new URL('../outputs/generated-tests/subsystem-cases.json', import.meta.url),
@@ -134,7 +159,7 @@ export async function expectApiRequests(
   testCase: SubsystemCase,
   timeout = 5000,
 ): Promise<void> {
-  for (const exp of testCase.expectedApi) {
+  for (const [index, exp] of testCase.expectedApi.entries()) {
     await expect
       .poll(
         () =>
@@ -150,15 +175,28 @@ export async function expectApiRequests(
         },
       )
       .toBe(true);
+    recordVerified(testCase, 'api', index);
   }
 }
 
-/** Asserts that no request matching `METHOD /path` was sent (e.g. invalid input must not be saved). */
-export function expectNoRequest(recorder: DeviceApiRecorder, method: string, path: string): void {
-  const hit = recorder.requests.find(
-    (r) => r.method === method.toUpperCase() && pathMatches(path, r.path),
-  );
-  expect(hit, `unexpected request ${method} ${path}`).toBeUndefined();
+/**
+ * Asserts that no request matching `METHOD /path` is sent (e.g. invalid input must not be saved).
+ * A request reaches the recorder asynchronously, a little after the click that triggers it, so the
+ * check keeps watching for `settleMs` before it passes (issue #19). Always `await` it.
+ */
+export async function expectNoRequest(
+  recorder: DeviceApiRecorder,
+  method: string,
+  path: string,
+  settleMs = 1000,
+): Promise<void> {
+  const find = () =>
+    recorder.requests.find((r) => r.method === method.toUpperCase() && pathMatches(path, r.path));
+  const deadline = Date.now() + settleMs;
+  while (Date.now() < deadline && !find()) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  expect(find(), `unexpected request ${method} ${path}`).toBeUndefined();
 }
 
 /**
@@ -170,10 +208,33 @@ export async function expectCss(
   testCase: SubsystemCase,
   defaultUiId?: string,
 ): Promise<void> {
-  for (const css of testCase.expectedCss) {
+  for (const [index, css] of testCase.expectedCss.entries()) {
     const selector = css.selector ?? (defaultUiId ? `@${defaultUiId}` : undefined);
     if (!selector) throw new Error(`[${testCase.id}] CSS expectation "${css.raw}" has no selector`);
     const locator = selector.startsWith('@') ? ui(page, selector.slice(1)) : page.locator(selector);
     await expect(locator, `[${testCase.id}] ${css.raw}`).toHaveCSS(css.property, css.value);
+    recordVerified(testCase, 'css', index);
   }
+}
+
+/**
+ * Verifies one `expectedUi` line of the case: `assertion` must contain the web-first assertion(s)
+ * the line describes. Every line needs its own call; Gate 4 checks that none was left out.
+ *
+ *   await expectUi(c, 0, () => expect(ui(page, 'status-message')).toHaveText('保存しました'));
+ */
+export async function expectUi(
+  testCase: SubsystemCase,
+  index: number,
+  assertion: () => unknown,
+): Promise<void> {
+  const line = testCase.expectedUi[index];
+  if (line === undefined)
+    throw new Error(
+      `[${testCase.id}] has no expectedUi[${index}] (${testCase.expectedUi.length} line(s))`,
+    );
+  await test.step(`[${testCase.id}] expectedUi[${index}] ${line}`, async () => {
+    await assertion();
+  });
+  recordVerified(testCase, 'ui', index);
 }

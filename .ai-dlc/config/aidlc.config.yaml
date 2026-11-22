@@ -104,7 +104,8 @@ copilot:
 
 gates:
   build:
-    command: [npx, ng, build, --configuration, development]
+    # production: the bundle size budgets in angular.json apply only to this configuration
+    command: [npx, ng, build, --configuration, production]
     timeoutMinutes: 15
   lint:
     command: [npx, ng, lint]

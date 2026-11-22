@@ -30,7 +30,7 @@ Each case has: `id`, `title`, `preconditions`, `initialDeviceState`, `mockApi` (
 `.ai-dlc/outputs/generated-tests/subsystem/<feature>.spec.ts`:
 
 ```ts
-import { expect, expectApiRequests, expectCss, expectNoRequest, loadCase, mockDeviceApi, test, ui } from '../../../tools/subsystem-kit';
+import { expect, expectApiRequests, expectCss, expectNoRequest, expectUi, loadCase, mockDeviceApi, test, ui } from '../../../tools/subsystem-kit';
 
 test.describe('ネットワーク設定', () => {
   const c = loadCase('ST-NET-003');
@@ -39,7 +39,7 @@ test.describe('ネットワーク設定', () => {
     await page.goto('/settings/network');                // step 1 (route from ui-bindings.yaml)
     await ui(page, 'ip-address').fill('192.168.0.20');   // step 2
     await ui(page, 'save-button').click();               // step 3
-    await expect(ui(page, 'status-message')).toHaveText('保存しました'); // expectedUi
+    await expectUi(c, 0, () => expect(ui(page, 'status-message')).toHaveText('保存しました')); // expectedUi[0]
     await expectCss(page, c);                            // expectedCss
     await expectApiRequests(api, c);                     // expectedApi
   });
@@ -52,8 +52,10 @@ Rules:
 2. Steps in order, one statement (or a small group) per step. Elements only via `ui(page, '<ui-id>')`.
 3. Literal values in steps (text to type, URL) come from the case text. Expected values come from the case:
    use `expectApiRequests` / `expectCss` for the structured columns and translate each `expectedUi` line
-   into an assertion (`toHaveText`, `toContainText`, `toBeDisabled`, `toBeVisible`, `toHaveURL`, ...).
-   A line such as "PUT ... は送信されない" becomes `expectNoRequest(api, 'PUT', '/api/v1/...')`.
+   into an assertion (`toHaveText`, `toContainText`, `toBeDisabled`, `toBeVisible`, `toHaveURL`, ...)
+   wrapped in `await expectUi(c, <line index>, () => …)` — one call per line.
+   A line such as "PUT ... は送信されない" becomes `await expectNoRequest(api, 'PUT', '/api/v1/...')`
+   (it watches for a while, because requests are recorded asynchronously — always `await` it).
 4. Never `test.skip`, `test.fixme`, `test.only`, `waitForTimeout`, or `force: true` clicks.
 5. If a case cannot be automated as written, still write the test with the closest faithful assertion
    and explain why in a comment. Never weaken or delete an expectation.
@@ -67,8 +69,12 @@ npx playwright test --config .ai-dlc/tools/playwright.subsystem.config.ts
 Before the implementation exists, only check that every case is collected (add `--list`); run them for
 real at the end of skill 02.
 
-The harness (Gate 4) passes only when **every** case ID has a passing test, no test is skipped and
-`subsystem-cases.json` still matches the Excel snapshot.
+The harness (Gate 4) passes only when **every** case ID has a passing test, no test is skipped,
+`subsystem-cases.json` still matches the Excel snapshot **and every expectation of every case was
+verified**: each `expectedApi` / `expectedCss` entry through `expectApiRequests` / `expectCss` and each
+`expectedUi` line through `expectUi`. The kit records this itself; a test that only opens the page, or
+that leaves out an expectation, fails the gate. Kit assertions must be awaited, and tests must not touch
+test annotations.
 
 ## When a test fails
 

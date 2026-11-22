@@ -68,6 +68,8 @@ Review in this order: `final-quality-gate.md` → `unresolved-issues.md` (if any
 | `Working tree has N uncommitted change(s)` | Commit / stash, or `--allow-dirty` (pre-existing changes then count as changes of the run). |
 | Gate 1 keeps reverting the same file | The policy and the requirement conflict: allow the change explicitly (zone) or change the requirement. |
 | Gate 4: `No test titled with [ID]` | The test title must contain `[<case ID>]`. |
+| Gate 4: `Expectation never verified by a passing test` | Each `expectedApi` / `expectedCss` entry needs `expectApiRequests` / `expectCss`, each `expectedUi` line its own `expectUi(c, index, …)` (skill 03). |
+| Gate 2: `angular.json budgets` | The production bundle exceeds a budget: lazy-load the screen or drop the heavy dependency. |
 | Gate 4: `Expected values were modified` | `subsystem-cases.json` was edited. Run `npm run aidlc:parse-excel`; never edit the JSON. |
 | Copilot CLI asks for permissions / does nothing | Non-interactive mode denies tools without an allow rule: add `--allow-tool` rules in `copilot.args`. |
 | QCD tokens marked "estimated" | The Copilot CLI version did not write `--usage-output-file`; numbers fall back to characters ÷ 4. |
