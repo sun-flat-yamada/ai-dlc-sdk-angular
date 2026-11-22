@@ -3,8 +3,14 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { freePort, lintGeneratedTests, unverified } from '../gate-runner.js';
-import { parseBuildErrors, parsePlaywrightReport } from '../lib/output-parsers.js';
+import { freePort, mutationSurvivors, unverified } from '../gate-runner.js';
+import { EVALUATED_ANNOTATION, KILLED_ANNOTATION, MUTANTS } from '../lib/mutants.js';
+import { analyzeGeneratedTests, analyzeTestFile } from '../lib/test-structure.js';
+import {
+  PlaywrightTestResult,
+  parseBuildErrors,
+  parsePlaywrightReport,
+} from '../lib/output-parsers.js';
 import { orphansSince } from '../lib/processes.js';
 import { SubsystemCase, VERIFIED_ANNOTATION } from '../lib/subsystem-cases.js';
 import { expectNoRequest, type DeviceApiRecorder } from '../subsystem-kit.js';
@@ -75,34 +81,140 @@ describe('Gate 4: verified expectations (issue #18)', () => {
     ).toEqual([]);
   });
 
-  describe('lintGeneratedTests', () => {
-    let dir = '';
-    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  describe('structural check (AST)', () => {
+    const KIT =
+      "import { expect, expectApiRequests, expectCss, expectNoRequest, expectUi, loadCase, test, ui } from '../../../tools/subsystem-kit';";
+    const check = (body: string) =>
+      analyzeTestFile(
+        'a.spec.ts',
+        [KIT, "const c = loadCase('ST-1');", body].join('\n'),
+        CASES,
+        new Map(),
+        new Set(),
+      ).map((p) => `${p.where.split(':').pop()} ${p.message}`);
+    const CASES = new Map([[CASE.id, CASE]]);
+    const GOOD = [
+      'test(`[${c.id}] t`, async ({ page }) => {',
+      '  const api = { requests: [] };',
+      "  await expectUi(c, 0, () => expect(ui(page, 'status')).toHaveText('保存しました'));",
+      '  await test.step("x", async () => {',
+      "    await expectUi(c, 1, async () => { await expect(ui(page, 'save')).not.toBeEnabled(); });",
+      '  });',
+      '  await expectCss(page, c);',
+      '  await expectApiRequests(api, c);',
+      '});',
+    ].join('\n');
 
-    it('rejects forged records and unawaited kit assertions', () => {
-      dir = mkdtempSync(path.join(tmpdir(), 'aidlc-specs-'));
-      writeFileSync(
-        path.join(dir, 'a.spec.ts'),
+    it('accepts a test that asserts every expectation unconditionally', () => {
+      expect(check(GOOD)).toEqual([]);
+      const report = analyzeGeneratedTests('/', [], [CASE]);
+      expect(report.problems).toEqual([]);
+    });
+
+    it('rejects dead, conditional, empty and forged assertions', () => {
+      const problems = check(
         [
-          "import { expectApiRequests, expectUi } from '../../../tools/subsystem-kit';",
           'test(`[${c.id}] t`, async ({ page }) => {',
           "  test.info().annotations.push({ type: 'aidlc-verified', description: 'ST-1:api:0' });",
           '  expectApiRequests(api, c);',
-          '  await expectUi(c, 0, () => expect(ui(page, "s")).toBeVisible());',
-          '  await expectUi(c, 1, async () => {',
-          "    await expectNoRequest(api, 'PUT', '/x');",
-          '  });',
+          '  if (process.env.X) await expectCss(page, c);',
+          '  await expectUi(c, 0, () => page.goto("/"));',
+          '  await expectUi(c, 7, () => expect(page).toHaveURL("/"));',
+          "  await ui(page, 'save').click({ force: true });",
+          '  const helper = async () => { await expectUi(c, 1, () => expect(page).toHaveURL("/")); };',
           '});',
+          'test.skip(`[${c.id}] later`, async () => {});',
         ].join('\n'),
       );
-      const problems = lintGeneratedTests(dir).map(
-        (p) => `${p.where.split(':').pop()} ${p.message}`,
-      );
       expect(problems).toEqual([
-        expect.stringMatching(/^3 Generated tests must not touch test annotations/),
-        expect.stringMatching(/^4 `expectApiRequests\(…\)` must be awaited/),
+        expect.stringMatching(/^4 Generated tests must not touch test annotations/),
+        expect.stringMatching(/^4 Generated tests must not write the verification records/),
+        expect.stringMatching(/^5 `expectApiRequests\(…\)` must be awaited/),
+        expect.stringMatching(/^6 `expectCss\(…\)` must run unconditionally .* inside an `if`/),
+        expect.stringMatching(/^7 expectUi\(c, 0, …\) must contain an assertion/),
+        expect.stringMatching(/^8 ST-1 has no expectedUi\[7\]/),
+        expect.stringMatching(/^9 `force: true` is not allowed/),
+        expect.stringMatching(/^10 `expectUi\(…\)` must run unconditionally .* helper function/),
+        expect.stringMatching(/^12 `test.skip` is not allowed/),
       ]);
     });
+
+    it('reports every expectation of a case that no test asserts', () => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'aidlc-specs-'));
+      try {
+        writeFileSync(
+          path.join(dir, 'a.spec.ts'),
+          [
+            KIT,
+            "const c = loadCase('ST-1');",
+            'test(`[${c.id}] t`, async ({ page }) => {',
+            "  await expectUi(c, 0, () => expect(ui(page, 's')).toBeVisible());",
+            '});',
+          ].join('\n'),
+        );
+        const r = analyzeGeneratedTests(dir, [path.join(dir, 'a.spec.ts')], [CASE]);
+        expect(r.problems.map((p) => p.message)).toEqual([
+          expect.stringMatching(/expectApiRequests/),
+          expect.stringMatching(/expectCss/),
+          expect.stringMatching(/expectedUi\[1\]/),
+        ]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('requires test and the helpers from the subsystem kit', () => {
+      const problems = analyzeTestFile(
+        'b.spec.ts',
+        "import { test, expect } from '@playwright/test';\n",
+        CASES,
+        new Map(),
+        new Set(),
+      );
+      expect(problems[0]?.message).toMatch(/Import `test` from the subsystem kit/);
+    });
+  });
+});
+
+describe('mutation check (issue #18)', () => {
+  const result = (
+    title: string,
+    status: 'passed' | 'failed',
+    notes: [string, string][],
+  ): PlaywrightTestResult => ({
+    title,
+    file: '',
+    status,
+    annotations: notes.map(([type, description]) => ({ type, description })),
+  });
+
+  it('reports expectedUi lines that no mutant made fail', () => {
+    const r = mutationSurvivors(
+      [CASE],
+      [
+        result('[ST-1] t', 'passed', [
+          [EVALUATED_ANNOTATION, 'ST-1:ui:0'],
+          [KILLED_ANNOTATION, 'ST-1:ui:0'],
+          [EVALUATED_ANNOTATION, 'ST-1:ui:1'],
+        ]),
+      ],
+    );
+    expect(r).toEqual({
+      lines: 2,
+      survivors: [{ id: 'ST-1', index: 1, line: '@save is disabled' }],
+    });
+  });
+
+  it('counts lines a failed test never reached as detected', () => {
+    const r = mutationSurvivors(
+      [CASE],
+      [result('[ST-1] t', 'failed', [[EVALUATED_ANNOTATION, 'ST-1:ui:0']])],
+    );
+    expect(r.survivors.map((s) => s.index)).toEqual([0]);
+  });
+
+  it('lists the mutants in the configuration', () => {
+    expect([...MUTANTS]).toEqual(['text', 'value', 'disabled', 'checked', 'navigation', 'request']);
   });
 });
 

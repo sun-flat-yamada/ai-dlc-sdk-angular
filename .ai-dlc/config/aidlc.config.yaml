@@ -122,6 +122,15 @@ gates:
     reportFile: .ai-dlc/outputs/generated-tests/report/results.json
     requireAllCasesCovered: true
     minPassRate: 1.0
+    # Every expectation of every case must be verified through the kit in a passing test
+    requireVerifiedExpectations: true
+    # AST check of the generated tests before they run (.ai-dlc/tools/lib/test-structure.ts)
+    structureCheck: true
+    # Once per run, the first time Gate 4 passes: every expectedUi line must fail under a mutant
+    mutation:
+      enabled: true
+      mutants: [text, value, disabled, checked, navigation, request]
+      expectTimeoutMs: 2000
 
 excel:
   # Empty = every sheet with a recognizable header row

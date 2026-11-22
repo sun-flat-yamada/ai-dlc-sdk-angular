@@ -81,10 +81,24 @@ Gate 4 passes only when:
   the file's own `casesSha256` and `baseline.json` — are writable by the agent and git-ignored, so they
   are never the only reference; inside the loop a missing or modified `baseline.json` also fails the gate,
 - every case ID has at least one test whose title contains `[<case ID>]`, and all of them passed,
+- the generated tests pass the structural check (`lib/test-structure.ts`, TypeScript AST): cases loaded
+  with a literal ID, `test` and helpers from the kit, no skip / only / `waitForTimeout` / `force: true`,
+  every kit assertion awaited and unconditional (no `if`, `?:`, `&&`, loop, `catch` or helper function
+  around it), every `expectUi` callback with a real assertion, and an assertion for every expectation of
+  every case (`gates.subsystem.structureCheck`),
 - every expectation of every case (`expectedApi`, `expectedCss`, each `expectedUi` line) was verified
   through the subsystem kit (`expectApiRequests`, `expectCss`, `expectUi`) in a passing test. The kit
   records each verified expectation as a test annotation; the generated tests may not write annotations
-  themselves and must await every kit assertion (`gates.subsystem.requireVerifiedExpectations`),
+  themselves (`gates.subsystem.requireVerifiedExpectations`),
+- once per run, the first time everything else passes, the **mutation check**
+  (`gates.subsystem.mutation`, `lib/mutants.ts`): the tests run again in one Playwright run with one
+  project per mutant — texts and input values changed, disabled / checked state broken, URL changes
+  blocked, a forbidden request pretended. Mutants are injected into the browser, so no rebuild is
+  needed. In these runs a failing `expectUi` assertion is recorded instead of ending the test, so every
+  line is evaluated under every mutant. Each `expectedUi` line must fail under at least one mutant (or
+  its test must fail before reaching it); surviving lines fail Gate 4 and the check is repeated at the
+  next pass. Once it passed, later iterations skip it (`npm run aidlc:gate -- --mutation` runs it by
+  hand),
 - no test is skipped, no test refers to an unknown case ID,
 - the pass rate is ≥ `gates.subsystem.minPassRate` (default 1.0).
 

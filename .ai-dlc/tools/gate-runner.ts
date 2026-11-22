@@ -10,6 +10,7 @@
  *   npm run aidlc:gate                          # all gates
  *   npm run aidlc:gate -- --only build,unit     # subset
  *   npm run aidlc:gate -- --json                # machine-readable result
+ *   npm run aidlc:gate -- --mutation            # also run the mutation check when Gate 4 passes
  */
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -31,7 +32,9 @@ import { RepositoryGuard } from './lib/repository-guard.js';
 import { exec, stripAnsi, tail } from './lib/exec.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import { enforceSandbox } from './lib/sandbox.js';
+import { EVALUATED_ANNOTATION, KILLED_ANNOTATION } from './lib/mutants.js';
 import {
+  PlaywrightTestResult,
   caseIdsInTitle,
   parseBuildErrors,
   parseCoverageSummary,
@@ -42,11 +45,12 @@ import {
 import {
   SubsystemCase,
   SubsystemCaseFile,
-  VERIFIED_ANNOTATION,
   hashCases,
   requiredVerifications,
+  verifiedKey,
 } from './lib/subsystem-cases.js';
 import { GateName, GateResult } from './lib/telemetry.js';
+import { analyzeGeneratedTests } from './lib/test-structure.js';
 
 export const GATE_ORDER: GateName[] = ['inputs', 'boundary', 'build', 'lint', 'unit', 'subsystem'];
 
@@ -69,6 +73,8 @@ export interface GateRunOptions {
   dependencies?: DependencyGuard;
   /** In-memory capture of `.git/` metadata and refs, checked and restored first by Gate 1. */
   repository?: RepositoryGuard;
+  /** Run the mutation check when Gate 4 passes (the loop asks for it until it passed once). */
+  mutationCheck?: boolean;
   echo?: boolean;
 }
 
@@ -226,40 +232,17 @@ function listSpecs(dir: string): string[] {
   );
 }
 
-const KIT_ASSERTIONS = ['expectApiRequests', 'expectCss', 'expectUi', 'expectNoRequest'];
-
 /**
- * Static checks of the generated tests (issue #18): they must not write the verification records of
- * the subsystem kit themselves, and every kit assertion must be awaited (an unawaited assertion can
- * fail after the test already passed). Returns the problems (empty when the tests are fine).
+ * Structural (AST) check of the generated tests (issue #18, `lib/test-structure.ts`). Returns the
+ * problems (empty when the tests are fine).
  */
-export function lintGeneratedTests(specDir: string): GateResult['failures'] {
-  const problems: GateResult['failures'] = [];
-  for (const file of listSpecs(specDir)) {
-    const abs = path.join(specDir, file);
-    const where = (line: number) => `${rel(path.resolve(specDir, '../../../..'), abs)}:${line}`;
-    const lines = readFileSync(abs, 'utf8').split(/\r?\n/);
-    lines.forEach((text, i) => {
-      if (new RegExp(`${VERIFIED_ANNOTATION}|\\bannotations\\b`).test(text)) {
-        problems.push({
-          where: where(i + 1),
-          message:
-            'Generated tests must not touch test annotations: the subsystem kit records verified expectations itself.',
-        });
-      }
-      for (const m of text.matchAll(new RegExp(`\\b(${KIT_ASSERTIONS.join('|')})\\s*\\(`, 'g'))) {
-        if (/^\s*import\b/.test(text) || /\bfrom\s+['"]/.test(text)) continue;
-        const before = text.slice(0, m.index).trimEnd();
-        if (!/(\bawait|=>|\breturn)$/.test(before)) {
-          problems.push({
-            where: where(i + 1),
-            message: `\`${m[1]}(…)\` must be awaited (\`await ${m[1]}(…)\`).`,
-          });
-        }
-      }
-    });
-  }
-  return problems;
+export function lintGeneratedTests(
+  root: string,
+  specDir: string,
+  cases: readonly SubsystemCase[],
+): GateResult['failures'] {
+  const files = listSpecs(specDir).map((f) => path.join(specDir, f));
+  return analyzeGeneratedTests(root, files, cases).problems;
 }
 
 /** Labels of the expectations of `c` that no passing test recorded as verified. */
@@ -312,6 +295,7 @@ export async function runSubsystemGate(
   config: AidlcConfig,
   echo = false,
   expectedCasesSha256?: string,
+  options: { mutation?: boolean } = {},
 ): Promise<GateResult> {
   const gate = config.gates.subsystem;
   const started = Date.now();
@@ -372,7 +356,7 @@ export async function runSubsystemGate(
       { cases: cases.cases.length, passed: 0, passRate: 0 },
     );
   }
-  const lint = lintGeneratedTests(specDir);
+  const lint = gate.structureCheck ? lintGeneratedTests(paths.root, specDir, cases.cases) : [];
   if (lint.length) {
     return fail(`${lint.length} problem(s) in the generated subsystem tests`, lint, {
       cases: cases.cases.length,
@@ -445,21 +429,118 @@ export async function runSubsystemGate(
       message: 'Test refers to a case ID that is not in the Excel specification.',
     });
   const passRate = cases.cases.length ? passedCases / cases.cases.length : 0;
-  const metrics = {
+  const baseMetrics = {
     cases: cases.cases.length,
     passed: passedCases,
     passRate,
     tests: results.length,
   };
-  const pass = failures.length === 0 && passRate >= gate.minPassRate;
+  let pass = failures.length === 0 && passRate >= gate.minPassRate;
+  const metrics: Record<string, number> = { ...baseMetrics };
+  if (pass && options.mutation && gate.mutation.enabled) {
+    log.step('Gate: subsystem — mutation check (once per run)');
+    const mutation = await runMutationCheck(paths, config, cases.cases, echo);
+    metrics['mutationLines'] = mutation.lines;
+    metrics['mutationSurvivors'] = mutation.failures.length;
+    if (mutation.failures.length) {
+      pass = false;
+      failures.push(...mutation.failures);
+    }
+  }
   return {
     gate: 'subsystem',
     status: pass ? 'pass' : 'fail',
     durationMs: Date.now() - started,
-    summary: `${passedCases}/${cases.cases.length} subsystem case(s) passed (${(passRate * 100).toFixed(1)}%)`,
+    summary: `${passedCases}/${cases.cases.length} subsystem case(s) passed (${(passRate * 100).toFixed(1)}%)${
+      metrics['mutationSurvivors'] !== undefined
+        ? `, mutation check: ${metrics['mutationSurvivors']} of ${metrics['mutationLines']} expectedUi line(s) undetected`
+        : ''
+    }`,
     failures,
     metrics,
     ...(pass ? {} : { logTail: tail(stripAnsi(r.output), 60) }),
+  };
+}
+
+/**
+ * Lines of `expectedUi` that no mutant made fail. A line counts as detected when its `expectUi`
+ * assertion failed under a mutant, or when the test failed before it reached the line.
+ */
+export function mutationSurvivors(
+  cases: readonly SubsystemCase[],
+  results: readonly PlaywrightTestResult[],
+): { lines: number; survivors: { id: string; index: number; line: string }[] } {
+  const killed = new Set<string>();
+  for (const t of results) {
+    const notes = t.annotations ?? [];
+    const evaluated = new Set(
+      notes.filter((a) => a.type === EVALUATED_ANNOTATION).map((a) => a.description),
+    );
+    for (const a of notes) if (a.type === KILLED_ANNOTATION) killed.add(a.description);
+    if (t.status === 'passed') continue;
+    for (const id of caseIdsInTitle(t.title)) {
+      const c = cases.find((x) => x.id === id);
+      c?.expectedUi.forEach((_, i) => {
+        const key = verifiedKey(id, 'ui', i);
+        if (!evaluated.has(key)) killed.add(key);
+      });
+    }
+  }
+  const survivors: { id: string; index: number; line: string }[] = [];
+  let lines = 0;
+  for (const c of cases) {
+    c.expectedUi.forEach((line, index) => {
+      lines++;
+      if (!killed.has(verifiedKey(c.id, 'ui', index))) survivors.push({ id: c.id, index, line });
+    });
+  }
+  return { lines, survivors };
+}
+
+/** Runs the tests against every mutant of `gates.subsystem.mutation` (one Playwright run). */
+export async function runMutationCheck(
+  paths: AidlcPaths,
+  config: AidlcConfig,
+  cases: readonly SubsystemCase[],
+  echo = false,
+): Promise<{ lines: number; failures: GateResult['failures'] }> {
+  const gate = config.gates.subsystem;
+  const reportFile = path.join(paths.root, gate.mutation.reportFile);
+  rmSync(reportFile, { force: true });
+  const port = await freePort();
+  const r = await exec(gate.command, {
+    cwd: paths.root,
+    timeoutMs: gate.timeoutMinutes * 60_000,
+    echo,
+    env: {
+      PLAYWRIGHT_JSON_OUTPUT_FILE: reportFile,
+      AIDLC_SUBSYSTEM_PORT: String(port),
+      AIDLC_MUTATION: gate.mutation.mutants.join(','),
+      AIDLC_MUTATION_EXPECT_TIMEOUT_MS: String(gate.mutation.expectTimeoutMs),
+    },
+    killProcessGroup: true,
+  });
+  if (!existsSync(reportFile)) {
+    return {
+      lines: 0,
+      failures: [
+        {
+          where: 'mutation check',
+          message: `Playwright did not produce ${rel(paths.root, reportFile)} (exit ${r.exitCode}): ${tail(stripAnsi(r.output), 5)}`,
+        },
+      ],
+    };
+  }
+  const { lines, survivors } = mutationSurvivors(
+    cases,
+    parsePlaywrightReport(readFileSync(reportFile, 'utf8')),
+  );
+  return {
+    lines,
+    failures: survivors.map((s) => ({
+      where: `${s.id} expectedUi[${s.index}]`,
+      message: `Mutation check: the test still passes when the app is broken (mutants: ${gate.mutation.mutants.join(', ')}), so it does not check "${s.line}". Assert exactly what the line says (text, value, disabled / checked state, URL, request).`,
+    })),
   };
 }
 
@@ -508,7 +589,9 @@ export async function runGates(
             ? await runLintGate(paths, config, echo)
             : name === 'unit'
               ? await runUnitGate(paths, config, echo)
-              : await runSubsystemGate(paths, config, echo, options.expectedCasesSha256);
+              : await runSubsystemGate(paths, config, echo, options.expectedCasesSha256, {
+                  mutation: options.mutationCheck ?? false,
+                });
     }
     log.info(`[${result.status.toUpperCase()}] ${name}: ${result.summary}`);
     results.push(result);
@@ -529,6 +612,7 @@ async function main(): Promise<number> {
       json: { type: 'boolean', default: false },
       'dry-run': { type: 'boolean', default: false },
       baseline: { type: 'string' },
+      mutation: { type: 'boolean', default: false },
     },
   });
   const root = findRepoRoot();
@@ -543,6 +627,7 @@ async function main(): Promise<number> {
     ...(only ? { only } : {}),
     dryRun: values['dry-run'],
     ...(values.baseline ? { baseline: values.baseline } : {}),
+    mutationCheck: values.mutation,
     echo: !values.json,
   });
   if (values.json) console.log(JSON.stringify(results, null, 2));

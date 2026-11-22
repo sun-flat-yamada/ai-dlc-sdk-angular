@@ -124,6 +124,10 @@ export interface PlaywrightTestResult {
   error?: string;
   /** `aidlc-verified` annotations: `<case ID>:<api|css|ui>:<index>` of every verified expectation. */
   verified?: string[];
+  /** Playwright project (`mutant-<kind>` in mutation runs). */
+  project?: string;
+  /** Every annotation of the last result, deduplicated. */
+  annotations?: { type: string; description: string }[];
 }
 
 interface PwSuite {
@@ -134,6 +138,7 @@ interface PwSuite {
     file?: string;
     tests?: {
       status?: string;
+      projectName?: string;
       annotations?: { type: string; description?: string }[];
       results?: {
         status?: string;
@@ -174,6 +179,17 @@ export function parsePlaywrightReport(json: string): PlaywrightTestResult[] {
           status,
           ...(error ? { error: stripAnsi(error).split('\n').slice(0, 6).join('\n') } : {}),
           ...(verified.length ? { verified } : {}),
+          ...(t.projectName ? { project: t.projectName } : {}),
+          annotations: [
+            ...new Map(
+              [...(t.annotations ?? []), ...(last?.annotations ?? [])]
+                .filter((a) => a.description !== undefined)
+                .map((a) => [
+                  `${a.type}\u0000${a.description}`,
+                  { type: a.type, description: a.description! },
+                ]),
+            ).values(),
+          ],
         });
       }
     }

@@ -15,7 +15,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
+import { expect, test as base, type Locator, type Page, type Request } from '@playwright/test';
+import { EVALUATED_ANNOTATION, KILLED_ANNOTATION, installMutant } from './lib/mutants.js';
 import {
   VERIFIED_ANNOTATION,
   verifiedKey,
@@ -24,7 +25,42 @@ import {
   type SubsystemCaseFile,
 } from './lib/subsystem-cases.js';
 
-export { expect, test } from '@playwright/test';
+export { expect } from '@playwright/test';
+
+/**
+ * Playwright `test` of the subsystem tests. In the mutation runs of Gate 4 it installs the project's
+ * mutant into every page before the app starts; otherwise it is the plain Playwright `test`.
+ */
+export const test = base.extend<{ aidlcMutant: void }>({
+  aidlcMutant: [
+    async ({ page }, use, testInfo) => {
+      const mutant = currentMutant(testInfo);
+      if (mutant && mutant !== 'request') await page.addInitScript(installMutant, mutant);
+      await use();
+    },
+    { auto: true },
+  ],
+});
+
+/** The mutant of the running mutation project, or undefined in normal runs. */
+function currentMutant(info?: {
+  project: { metadata?: Record<string, unknown> };
+}): string | undefined {
+  try {
+    const value = (info ?? base.info()).project.metadata?.['aidlcMutant'];
+    return typeof value === 'string' ? value : undefined;
+  } catch {
+    return undefined; // outside a running test
+  }
+}
+
+function annotate(type: string, description: string): void {
+  try {
+    base.info().annotations.push({ type, description });
+  } catch {
+    // outside a running test
+  }
+}
 
 /**
  * Records that an expectation of the case was verified. Gate 4 requires a record for every
@@ -32,14 +68,7 @@ export { expect, test } from '@playwright/test';
  * write these annotations themselves (Gate 4 rejects test files that mention them).
  */
 function recordVerified(testCase: SubsystemCase, kind: ExpectationKind, index: number): void {
-  try {
-    test.info().annotations.push({
-      type: VERIFIED_ANNOTATION,
-      description: verifiedKey(testCase.id, kind, index),
-    });
-  } catch {
-    // Called outside a running Playwright test (unit tests of the kit): nothing to record.
-  }
+  annotate(VERIFIED_ANNOTATION, verifiedKey(testCase.id, kind, index));
 }
 
 const casesFile = fileURLToPath(
@@ -157,6 +186,8 @@ export async function expectApiRequests(
   testCase: SubsystemCase,
   timeout = 5000,
 ): Promise<void> {
+  // Mutation runs check the agent's UI assertions only; the kit's own checks are trusted.
+  if (currentMutant()) return;
   for (const [index, exp] of testCase.expectedApi.entries()) {
     await expect
       .poll(
@@ -189,7 +220,12 @@ export async function expectNoRequest(
   settleMs = 1000,
 ): Promise<void> {
   const find = () =>
-    recorder.requests.find((r) => r.method === method.toUpperCase() && pathMatches(path, r.path));
+    // The `request` mutant pretends the request was sent: an expectNoRequest that still passes is dead code.
+    currentMutant() === 'request'
+      ? { method, path, body: undefined }
+      : recorder.requests.find(
+          (r) => r.method === method.toUpperCase() && pathMatches(path, r.path),
+        );
   const deadline = Date.now() + settleMs;
   while (Date.now() < deadline && !find()) {
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -206,6 +242,7 @@ export async function expectCss(
   testCase: SubsystemCase,
   defaultUiId?: string,
 ): Promise<void> {
+  if (currentMutant()) return;
   for (const [index, css] of testCase.expectedCss.entries()) {
     const selector = css.selector ?? (defaultUiId ? `@${defaultUiId}` : undefined);
     if (!selector) throw new Error(`[${testCase.id}] CSS expectation "${css.raw}" has no selector`);
@@ -231,7 +268,21 @@ export async function expectUi(
     throw new Error(
       `[${testCase.id}] has no expectedUi[${index}] (${testCase.expectedUi.length} line(s))`,
     );
-  await test.step(`[${testCase.id}] expectedUi[${index}] ${line}`, async () => {
+  const key = verifiedKey(testCase.id, 'ui', index);
+  if (currentMutant()) {
+    // Mutation run: a failing assertion means this line detected the mutant. Keep going, so that
+    // every line of the test is evaluated under every mutant.
+    annotate(EVALUATED_ANNOTATION, key);
+    try {
+      await base.step(`[${testCase.id}] expectedUi[${index}] ${line} (mutant)`, async () => {
+        await assertion();
+      });
+    } catch {
+      annotate(KILLED_ANNOTATION, key);
+    }
+    return;
+  }
+  await base.step(`[${testCase.id}] expectedUi[${index}] ${line}`, async () => {
     await assertion();
   });
   recordVerified(testCase, 'ui', index);

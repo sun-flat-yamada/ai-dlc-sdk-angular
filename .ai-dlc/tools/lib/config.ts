@@ -109,6 +109,30 @@ export const configSchema = z.object({
        * through the subsystem kit (expectApiRequests, expectCss, expectUi) in a passing test.
        */
       requireVerifiedExpectations: z.boolean().default(true),
+      /** AST check of the generated tests before they run (lib/test-structure.ts). */
+      structureCheck: z.boolean().default(true),
+      /**
+       * Mutation check: the first time Gate 4 passes in a run, the tests run again against mutants of
+       * the app (lib/mutants.ts); every expectedUi line must fail under at least one mutant.
+       */
+      mutation: z
+        .object({
+          enabled: z.boolean().default(true),
+          mutants: z
+            .array(z.enum(['text', 'value', 'disabled', 'checked', 'navigation', 'request']))
+            .default(['text', 'value', 'disabled', 'checked', 'navigation', 'request']),
+          /** Assertion timeout in the mutation runs (a killed assertion waits this long). */
+          expectTimeoutMs: z.number().int().positive().default(2000),
+          reportFile: z
+            .string()
+            .default('.ai-dlc/outputs/generated-tests/report/mutation-results.json'),
+        })
+        .default({
+          enabled: true,
+          mutants: ['text', 'value', 'disabled', 'checked', 'navigation', 'request'],
+          expectTimeoutMs: 2000,
+          reportFile: '.ai-dlc/outputs/generated-tests/report/mutation-results.json',
+        }),
     }),
   }),
   excel: z
