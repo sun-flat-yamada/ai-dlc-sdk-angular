@@ -57,6 +57,10 @@ Rules:
    A line such as "PUT ... は送信されない" becomes `await expectNoRequest(api, 'PUT', '/api/v1/...')`
    (it watches for a while, because requests are recorded asynchronously — always `await` it).
 4. Never `test.skip`, `test.fixme`, `test.only`, `waitForTimeout`, or `force: true` clicks.
+   Import `test` and every helper from the subsystem kit, load cases with `loadCase('<literal ID>')`,
+   and call the kit assertions (`expectApiRequests`, `expectCss`, `expectUi`, `expectNoRequest`) with
+   `await`, directly in the test body or in a `test.step` — never behind `if`, `?:`, `&&`, a loop, a
+   `catch` or a helper function. Each `expectUi` callback must contain a real assertion.
 5. If a case cannot be automated as written, still write the test with the closest faithful assertion
    and explain why in a comment. Never weaken or delete an expectation.
 
@@ -71,10 +75,17 @@ real at the end of skill 02.
 
 The harness (Gate 4) passes only when **every** case ID has a passing test, no test is skipped,
 `subsystem-cases.json` still matches the Excel snapshot **and every expectation of every case was
-verified**: each `expectedApi` / `expectedCss` entry through `expectApiRequests` / `expectCss` and each
-`expectedUi` line through `expectUi`. The kit records this itself; a test that only opens the page, or
-that leaves out an expectation, fails the gate. Kit assertions must be awaited, and tests must not touch
-test annotations.
+verified**, checked three ways:
+
+- **Structure (AST)** before the tests run: rule 4 above, plus one `expectApiRequests` / `expectCss` per
+  case that has those columns and one `expectUi(c, i, …)` with an assertion for every `expectedUi` line.
+- **Run-time records**: the kit records each expectation it verified in a passing test; a missing
+  record fails the gate. Tests must not touch test annotations.
+- **Mutation check**, once per run — the first time all cases pass: the tests run again against
+  mutants of the app (texts and input values changed, disabled / checked state broken, URL changes
+  blocked, a forbidden request pretended). Every `expectedUi` line must fail under at least one mutant.
+  An assertion such as `toBeVisible()` for "shows 保存しました" survives and fails the gate: assert the
+  exact text, value, state or URL the line describes.
 
 ## When a test fails
 

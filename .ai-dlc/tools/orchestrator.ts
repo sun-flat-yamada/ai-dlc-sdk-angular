@@ -459,6 +459,8 @@ export async function runFullLoop(
   };
   upsertRun(paths.runHistory, run);
 
+  // The mutation check runs once: when Gate 4 first passes with the tests written for this run.
+  let mutationVerified = false;
   try {
     let previous: GateResult[] = [];
     for (let i = 1; i <= maxIterations; i++) {
@@ -500,10 +502,12 @@ export async function runFullLoop(
         expectedCasesSha256: cases.casesSha256,
         ...(dependencies ? { dependencies } : {}),
         repository,
+        mutationCheck: !mutationVerified,
         echo: false,
       });
       if (options.dryRun && options.simulatePassAt === i) gates = simulatedPass(gates);
       iteration.gates = gates;
+      if (gates.some((g) => g.gate === 'subsystem' && g.status === 'pass')) mutationVerified = true;
       iteration.passed = allGatesPassed(gates);
       iteration.endedAt = new Date().toISOString();
       writeFileSync(path.join(iterDir, 'gate-results.md'), renderFailures(iteration), 'utf8');

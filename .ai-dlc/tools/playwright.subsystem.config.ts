@@ -10,6 +10,14 @@ import { defineConfig, devices } from '@playwright/test';
  * the gate must test the working tree, not whatever is already listening on the port (issue #17).
  */
 const port = Number(process.env['AIDLC_SUBSYSTEM_PORT'] ?? 4310);
+const device = {
+  ...devices['Desktop Chrome'],
+  viewport: { width: 800, height: 480 },
+  hasTouch: true,
+};
+// Mutation check of Gate 4 (once per run): one project per mutant, see lib/mutants.ts.
+const mutants = (process.env['AIDLC_MUTATION'] ?? '').split(',').filter(Boolean);
+const mutantTimeout = Number(process.env['AIDLC_MUTATION_EXPECT_TIMEOUT_MS'] ?? 2000);
 
 export default defineConfig({
   testDir: '../outputs/generated-tests/subsystem',
@@ -25,12 +33,14 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [
-    {
-      name: 'front-panel',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 800, height: 480 }, hasTouch: true },
-    },
-  ],
+  projects: mutants.length
+    ? mutants.map((m) => ({
+        name: `mutant-${m}`,
+        use: device,
+        metadata: { aidlcMutant: m },
+        expect: { timeout: mutantTimeout },
+      }))
+    : [{ name: 'front-panel', use: device }],
   webServer: {
     command: `npx ng serve --port ${port}`,
     cwd: '../..',
