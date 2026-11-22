@@ -30,7 +30,12 @@ If your project needs extra hosts (private npm registry, internal APIs) add them
    factual: they are injected into every prompt.
 3. **`aidlc.config.yaml`** — Angular project name, gate commands (match your `package.json`), coverage
    file and thresholds, Copilot CLI permissions, QCD unit costs.
-4. **`playwright.subsystem.config.ts`** — dev-server command and port.
+4. **`playwright.subsystem.config.ts`** — dev-server command (Gate 4 picks the port itself).
+5. **Replacing `deletable` code** — `extensible` files are append-only, so the agent can never remove
+   the lines that still reference old code (a route's `loadComponent`, a menu entry). Deleting the old
+   files alone breaks the build, so a run that has to replace an old screen fails until the iteration
+   limit. Before the run, remove (or redirect) those references yourself and commit; the agent then
+   deletes or replaces the now unreferenced `deletable` files.
 
 ## 3. Prepare one development item
 

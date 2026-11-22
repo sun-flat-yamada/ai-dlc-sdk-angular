@@ -94,6 +94,11 @@ export interface QcdResult {
       inputTokens: number;
       outputTokens: number;
       tokensAreEstimated: boolean;
+      /**
+       * True when a real Copilot call left no usage file (crash, timeout): its AI credits are
+       * missing from aiCost, so the cost reduction is not reported.
+       */
+      creditsAreIncomplete: boolean;
       aiCost: number;
       humanHours: number;
       humanCost: number;
@@ -158,6 +163,7 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
     ? withUsage.reduce((s, c) => s + (c.usage?.premiumRequests ?? 0), 0)
     : null;
   const tokensAreEstimated = withUsage.length !== calls.length;
+  const creditsAreIncomplete = withUsage.length !== realCalls.length;
   const inputTokens = sum((c) => c.usage?.inputTokens ?? c.estimatedInputTokens);
   const outputTokens = sum((c) => c.usage?.outputTokens ?? c.estimatedOutputTokens);
   const aiCost =
@@ -165,7 +171,8 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
     (premiumRequests ?? 0) * config.qcd.premiumRequestUnitCost;
   const hourlyRate = human.cost.hourlyRate ?? config.qcd.humanHourlyRate;
   const aiHumanHours = Object.values(config.qcd.aiDlcHumanHours).reduce((a, b) => a + b, 0);
-  const aiHumanCost = aiHumanHours * config.qcd.humanHourlyRate;
+  // The same hourly rate on both sides: one hour of the same people costs the same.
+  const aiHumanCost = aiHumanHours * hourlyRate;
   const humanHours = Object.values(human.cost.effortHours).reduce((a, b) => a + b, 0);
   const humanCost = humanHours * hourlyRate;
   const aiTotal = aiCost + aiHumanCost;
@@ -218,6 +225,7 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
         inputTokens,
         outputTokens,
         tokensAreEstimated,
+        creditsAreIncomplete,
         aiCost: round(aiCost),
         humanHours: aiHumanHours,
         humanCost: round(aiHumanCost),
@@ -229,7 +237,7 @@ export function calculateQcd(run: RunRecord, human: HumanBaseline, config: Aidlc
         totalCost: round(humanCost),
         breakdown: human.cost.effortHours,
       },
-      reductionRate: comparable ? rate(aiTotal, humanCost) : null,
+      reductionRate: comparable && !creditsAreIncomplete ? rate(aiTotal, humanCost) : null,
     },
     delivery: {
       ai: {
@@ -271,6 +279,8 @@ const L = {
     credits: 'AI クレジット / プレミアムリクエスト',
     tokens: 'トークン（入力 / 出力）',
     estimated: '推定値を含む',
+    creditsIncomplete:
+      '> ⚠ usage を取得できなかった Copilot CLI 呼び出しがあり、AI クレジットが不完全です。AI コストは過小評価になるため、コストの削減率は算出しません（N/A）。',
     aiCost: 'AI 実行コスト',
     humanHours: '人の工数（時間）',
     humanCost: '人のコスト',
@@ -283,7 +293,7 @@ const L = {
     notes: '算出方法',
     notesBody: [
       'AI コスト = AI クレジット × `qcd.aiCreditUnitCost` + プレミアムリクエスト × `qcd.premiumRequestUnitCost`（`aidlc.config.yaml`）。',
-      'AI-DLC の人の工数 = `qcd.aiDlcHumanHours`（インプット配置・レビュー等）。',
+      'AI-DLC の人の工数 = `qcd.aiDlcHumanHours`（インプット配置・レビュー等）。時間単価は人の開発と同じ（`human-qcd.json` の `cost.hourlyRate`、未設定なら `qcd.humanHourlyRate`）。',
       'トークン数は Copilot CLI の `--usage-output-file` の実測値。取得できない呼び出しは文字数 ÷ 4 の推定値。',
       'リードタイム = ループ開始から事後処理（リバース設計書生成）完了まで。',
       '削減率 = (人間 − AI) ÷ 人間。正の値は AI-DLC が少ない（良い）ことを示す。',
@@ -313,6 +323,8 @@ const L = {
     credits: 'AI credits / premium requests',
     tokens: 'Tokens (input / output)',
     estimated: 'includes estimates',
+    creditsIncomplete:
+      '> ⚠ Some Copilot CLI calls wrote no usage data, so the AI credits are incomplete and the AI cost is understated. The cost reduction is not calculated (N/A).',
     aiCost: 'AI execution cost',
     humanHours: 'Human effort (hours)',
     humanCost: 'Human cost',
@@ -325,7 +337,7 @@ const L = {
     notes: 'Method',
     notesBody: [
       'AI cost = AI credits × `qcd.aiCreditUnitCost` + premium requests × `qcd.premiumRequestUnitCost` (`aidlc.config.yaml`).',
-      'AI-DLC human effort = `qcd.aiDlcHumanHours` (input preparation, review, ...).',
+      'AI-DLC human effort = `qcd.aiDlcHumanHours` (input preparation, review, ...), at the same hourly rate as human development (`cost.hourlyRate` in `human-qcd.json`, else `qcd.humanHourlyRate`).',
       'Tokens come from Copilot CLI `--usage-output-file`; calls without usage data use characters ÷ 4.',
       'Lead time = from loop start until post-processing (reverse docs) finished.',
       'Reduction = (human − AI) ÷ human. Positive means AI-DLC needed less.',
@@ -357,6 +369,7 @@ export function renderQcdMarkdown(r: QcdResult, language: 'ja' | 'en'): string {
     `- Run: \`${r.runId}\` / ${r.generatedAt}`,
     r.dryRun ? `\n${t.dry}` : '',
     r.comparable ? '' : `\n${t.notComparable}`,
+    r.cost.ai.creditsAreIncomplete ? `\n${t.creditsIncomplete}` : '',
     '',
     `## ${t.q}`,
     '',
@@ -405,7 +418,12 @@ export function renderQcdMarkdown(r: QcdResult, language: 'ja' | 'en'): string {
         '—',
         '—',
       ],
-      [t.aiCost, money(r.cost.ai.aiCost), '—', '—'],
+      [
+        t.aiCost,
+        `${money(r.cost.ai.aiCost)}${r.cost.ai.creditsAreIncomplete ? ' ⚠' : ''}`,
+        '—',
+        '—',
+      ],
       [t.humanHours, num(r.cost.ai.humanHours), num(r.cost.human.effortHours), '—'],
       [t.humanCost, money(r.cost.ai.humanCost), money(r.cost.human.totalCost), '—'],
       [
