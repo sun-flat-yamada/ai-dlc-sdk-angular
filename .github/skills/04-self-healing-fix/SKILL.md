@@ -19,7 +19,7 @@ run yet — fix what is reported, then run the local checks for the later gates 
 | **D. Design not reflected** | Wrong text / class / color, missing `data-ui-id`, element hidden or enabled at the wrong time | Page template / styles vs. design HTML/CSS and `enabledWhen` / `visibleWhen` |
 | **A. API contract misread** | Request body / path differs from `expectedApi`, wrong field names, missing error handling | API service / request mapping vs. OpenAPI and `ui-bindings.yaml` |
 | **R. Reuse contract broken** | Duplicate HTTP / beep / polling logic, `HttpClient` injected, `ApiError.kind` ignored | Use the module from `.ai-dlc/references/reusable-catalog.md` |
-| **T. Test defect** | Selector not found although the element exists, race without proper `expect` waiting | The test code only: selectors via `ui()`, web-first assertions. **Never change an expected value.** |
+| **T. Test defect** | Selector not found although the element exists, race without proper `expect` waiting, `Expectation never verified`, `must be awaited` | The test code only: selectors via `ui()`, web-first assertions, one `expectUi` per `expectedUi` line, `expectApiRequests` / `expectCss` for the structured columns. **Never change, weaken or drop an expected value.** |
 | **E. Environment** | Timeout starting the dev server, missing browser | Report it in `.ai-dlc/outputs/reports/fix-notes.md`; do not hack around it |
 
 ## Procedure

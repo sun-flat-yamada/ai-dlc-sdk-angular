@@ -17,6 +17,7 @@ import { parseArgs } from 'node:util';
 import { AidlcConfig, AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { exec } from './lib/exec.js';
 import { Git } from './lib/git.js';
+import { killOrphansSince, snapshotPids } from './lib/processes.js';
 import { isMain, log, rel, runCli } from './lib/cli.js';
 import { CopilotCallRecord, estimateTokens, parseUsageFile } from './lib/telemetry.js';
 
@@ -82,6 +83,7 @@ export async function callCopilot(
   const startedAt = new Date();
   let exitCode = 0;
   let output = '';
+  let leftover: string[] = [];
   if (request.dryRun) {
     output = `[dry-run] ${command.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ')}\n`;
     log.info(
@@ -89,13 +91,21 @@ export async function callCopilot(
     );
   } else {
     log.info(`Copilot CLI: ${request.id} (skills: ${request.skills.join(', ')})`);
+    const pids = snapshotPids();
+    // Own process group, killed when the CLI exits: no background server or watcher survives.
     const result = await exec(command, {
       cwd: paths.root,
       timeoutMs: config.copilot.timeoutMinutes * 60_000,
       echo: request.echo ?? true,
+      killProcessGroup: true,
     });
     exitCode = result.exitCode;
     output = result.output;
+    leftover = killOrphansSince(pids).map((p) => `${p.pid} ${p.command}`.slice(0, 200));
+    if (leftover.length)
+      log.warn(
+        `Killed ${leftover.length} process(es) the agent left running:\n  ${leftover.join('\n  ')}`,
+      );
     if (result.timedOut)
       log.warn(`Copilot CLI timed out after ${config.copilot.timeoutMinutes} min`);
   }
@@ -122,6 +132,7 @@ export async function callCopilot(
     outputChars: output.length,
     estimatedOutputTokens: estimateTokens(output.length),
     ...(usage ? { usage } : {}),
+    ...(leftover.length ? { leftoverProcesses: leftover } : {}),
     changedFiles,
   };
 }

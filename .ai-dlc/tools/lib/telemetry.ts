@@ -27,6 +27,8 @@ export interface CopilotCallRecord {
   outputChars: number;
   estimatedOutputTokens: number;
   usage?: UsageRecord;
+  /** Processes the agent left running after the call (killed before the gates). */
+  leftoverProcesses?: string[];
   changedFiles: string[];
   /** Post-process only: changes outside the paths the call may write (restored unless --no-revert). */
   violations?: GateFailure[];

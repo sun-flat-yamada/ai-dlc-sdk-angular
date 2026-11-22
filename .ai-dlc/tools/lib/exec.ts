@@ -19,6 +19,21 @@ export interface ExecOptions {
   maxOutputChars?: number;
   /** Written to the child's stdin (otherwise stdin is closed). */
   input?: string;
+  /**
+   * POSIX only: start the child in its own process group and kill the whole group when the child
+   * exits or times out, so that no grandchild (a background server, a watcher) outlives the call.
+   */
+  killProcessGroup?: boolean;
+}
+
+/** Sends SIGKILL to the process group `pgid` (ignored when it no longer exists). */
+export function killGroup(pgid: number | undefined): void {
+  if (!pgid || process.platform === 'win32') return;
+  try {
+    process.kill(-pgid, 'SIGKILL');
+  } catch {
+    // ESRCH: the group is already gone.
+  }
 }
 
 /**
@@ -32,6 +47,7 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
   }
   const started = Date.now();
   const max = options.maxOutputChars ?? 2_000_000;
+  const group = options.killProcessGroup === true && process.platform !== 'win32';
   return new Promise((resolve) => {
     let output = '';
     let timedOut = false;
@@ -40,6 +56,7 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
       env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1', ...options.env },
       stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
       windowsHide: true,
+      detached: group,
     });
     const append = (chunk: Buffer) => {
       const text = chunk.toString('utf8');
@@ -58,11 +75,13 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
       options.timeoutMs !== undefined
         ? setTimeout(() => {
             timedOut = true;
-            child.kill('SIGTERM');
+            if (group) killGroup(child.pid);
+            else child.kill('SIGTERM');
           }, options.timeoutMs)
         : undefined;
     const finish = (exitCode: number) => {
       if (timer) clearTimeout(timer);
+      if (group) killGroup(child.pid);
       resolve({
         command: [...command],
         exitCode,
@@ -75,6 +94,8 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
       output += `\n[exec] ${error.message}\n`;
       finish(127);
     });
+    // Grandchildren holding the output pipes would delay 'close' until they exit: end them now.
+    if (group) child.on('exit', () => killGroup(child.pid));
     child.on('close', (code) => finish(timedOut ? 124 : (code ?? 1)));
   });
 }

@@ -5,7 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
  * Run from the repository root:
  *   npx playwright test --config .ai-dlc/tools/playwright.subsystem.config.ts
  *
- * The JSON report path is injected by gate-runner through PLAYWRIGHT_JSON_OUTPUT_FILE.
+ * The JSON report path is injected by gate-runner through PLAYWRIGHT_JSON_OUTPUT_FILE, and Gate 4
+ * passes a free port of its own through AIDLC_SUBSYSTEM_PORT. An existing server is never reused:
+ * the gate must test the working tree, not whatever is already listening on the port (issue #17).
  */
 const port = Number(process.env['AIDLC_SUBSYSTEM_PORT'] ?? 4310);
 
@@ -33,7 +35,7 @@ export default defineConfig({
     command: `npx ng serve --port ${port}`,
     cwd: '../..',
     url: `http://localhost:${port}`,
-    reuseExistingServer: !process.env['CI'],
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

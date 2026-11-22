@@ -64,6 +64,34 @@ export interface SubsystemCaseFile {
   warnings: string[];
 }
 
+/** Playwright annotation type the subsystem kit records for every expectation it verified. */
+export const VERIFIED_ANNOTATION = 'aidlc-verified';
+
+export type ExpectationKind = 'api' | 'css' | 'ui';
+
+/** Annotation description of one verified expectation: `<case ID>:<kind>:<index>`. */
+export function verifiedKey(caseId: string, kind: ExpectationKind, index: number): string {
+  return `${caseId}:${kind}:${index}`;
+}
+
+/** Every expectation of a case that a passing test has to verify (as `verifiedKey` strings). */
+export function requiredVerifications(c: SubsystemCase): { key: string; label: string }[] {
+  return [
+    ...c.expectedApi.map((e, i) => ({
+      key: verifiedKey(c.id, 'api', i),
+      label: `expectedApi[${i}] ${e.raw} (expectApiRequests)`,
+    })),
+    ...c.expectedCss.map((e, i) => ({
+      key: verifiedKey(c.id, 'css', i),
+      label: `expectedCss[${i}] ${e.raw} (expectCss)`,
+    })),
+    ...c.expectedUi.map((line, i) => ({
+      key: verifiedKey(c.id, 'ui', i),
+      label: `expectedUi[${i}] ${line} (expectUi(c, ${i}, …))`,
+    })),
+  ];
+}
+
 export function hashCases(cases: readonly SubsystemCase[]): string {
   return createHash('sha256').update(JSON.stringify(cases)).digest('hex');
 }

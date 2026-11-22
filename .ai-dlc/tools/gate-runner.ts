@@ -12,6 +12,7 @@
  *   npm run aidlc:gate -- --json                # machine-readable result
  */
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { readBaseline, runBoundaryGuard } from './boundary-guard.js';
@@ -38,7 +39,13 @@ import {
   parsePlaywrightReport,
   parseVitestFailures,
 } from './lib/output-parsers.js';
-import { SubsystemCaseFile, hashCases } from './lib/subsystem-cases.js';
+import {
+  SubsystemCase,
+  SubsystemCaseFile,
+  VERIFIED_ANNOTATION,
+  hashCases,
+  requiredVerifications,
+} from './lib/subsystem-cases.js';
 import { GateName, GateResult } from './lib/telemetry.js';
 
 export const GATE_ORDER: GateName[] = ['inputs', 'boundary', 'build', 'lint', 'unit', 'subsystem'];
@@ -70,7 +77,26 @@ function skipped(gate: GateName, summary: string): GateResult {
 }
 
 async function runCommand(paths: AidlcPaths, gate: GateConfig, echo: boolean) {
-  return exec(gate.command, { cwd: paths.root, timeoutMs: gate.timeoutMinutes * 60_000, echo });
+  return exec(gate.command, {
+    cwd: paths.root,
+    timeoutMs: gate.timeoutMinutes * 60_000,
+    echo,
+    killProcessGroup: true,
+  });
+}
+
+/** A TCP port on localhost that nothing listens on right now. */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      server.close(() => (port ? resolve(port) : reject(new Error('no free port'))));
+    });
+  });
 }
 
 export async function runBuildGate(
@@ -200,6 +226,53 @@ function listSpecs(dir: string): string[] {
   );
 }
 
+const KIT_ASSERTIONS = ['expectApiRequests', 'expectCss', 'expectUi', 'expectNoRequest'];
+
+/**
+ * Static checks of the generated tests (issue #18): they must not write the verification records of
+ * the subsystem kit themselves, and every kit assertion must be awaited (an unawaited assertion can
+ * fail after the test already passed). Returns the problems (empty when the tests are fine).
+ */
+export function lintGeneratedTests(specDir: string): GateResult['failures'] {
+  const problems: GateResult['failures'] = [];
+  for (const file of listSpecs(specDir)) {
+    const abs = path.join(specDir, file);
+    const where = (line: number) => `${rel(path.resolve(specDir, '../../../..'), abs)}:${line}`;
+    const lines = readFileSync(abs, 'utf8').split(/\r?\n/);
+    lines.forEach((text, i) => {
+      if (new RegExp(`${VERIFIED_ANNOTATION}|\\bannotations\\b`).test(text)) {
+        problems.push({
+          where: where(i + 1),
+          message:
+            'Generated tests must not touch test annotations: the subsystem kit records verified expectations itself.',
+        });
+      }
+      for (const m of text.matchAll(new RegExp(`\\b(${KIT_ASSERTIONS.join('|')})\\s*\\(`, 'g'))) {
+        if (/^\s*import\b/.test(text) || /\bfrom\s+['"]/.test(text)) continue;
+        const before = text.slice(0, m.index).trimEnd();
+        if (!/(\bawait|=>|\breturn)$/.test(before)) {
+          problems.push({
+            where: where(i + 1),
+            message: `\`${m[1]}(…)\` must be awaited (\`await ${m[1]}(…)\`).`,
+          });
+        }
+      }
+    });
+  }
+  return problems;
+}
+
+/** Labels of the expectations of `c` that no passing test recorded as verified. */
+export function unverified(
+  c: SubsystemCase,
+  tests: readonly { status: string; verified?: string[] }[],
+): string[] {
+  const seen = new Set(tests.filter((t) => t.status === 'passed').flatMap((t) => t.verified ?? []));
+  return requiredVerifications(c)
+    .filter((r) => !seen.has(r.key))
+    .map((r) => r.label);
+}
+
 /**
  * Verifies that the expected values in `subsystem-cases.json` are exactly what the Excel workbooks
  * say. Everything under `.ai-dlc/outputs/` is writable by the agent and git-ignored, so the file's
@@ -299,13 +372,24 @@ export async function runSubsystemGate(
       { cases: cases.cases.length, passed: 0, passRate: 0 },
     );
   }
+  const lint = lintGeneratedTests(specDir);
+  if (lint.length) {
+    return fail(`${lint.length} problem(s) in the generated subsystem tests`, lint, {
+      cases: cases.cases.length,
+      passed: 0,
+      passRate: 0,
+    });
+  }
   const reportFile = path.join(paths.root, gate.reportFile);
   rmSync(reportFile, { force: true });
+  // A fresh port per run: a server the agent left on the default port cannot answer for the app.
+  const port = await freePort();
   const r = await exec(gate.command, {
     cwd: paths.root,
     timeoutMs: gate.timeoutMinutes * 60_000,
     echo,
-    env: { PLAYWRIGHT_JSON_OUTPUT_FILE: reportFile },
+    env: { PLAYWRIGHT_JSON_OUTPUT_FILE: reportFile, AIDLC_SUBSYSTEM_PORT: String(port) },
+    killProcessGroup: true,
   });
   if (!existsSync(reportFile)) {
     return {
@@ -332,8 +416,16 @@ export async function runSubsystemGate(
       continue;
     }
     const bad = tests.filter((t) => t.status !== 'passed');
-    if (bad.length === 0) {
+    const missing = gate.requireVerifiedExpectations ? unverified(c, tests) : [];
+    if (bad.length === 0 && missing.length === 0) {
       passedCases++;
+    } else if (bad.length === 0) {
+      for (const label of missing) {
+        failures.push({
+          where: c.id,
+          message: `Expectation never verified by a passing test: ${label}. A test that does not check the Excel expectation does not count.`,
+        });
+      }
     } else {
       for (const t of bad) {
         failures.push({

@@ -104,6 +104,11 @@ export const configSchema = z.object({
       requireAllCasesCovered: z.boolean().default(true),
       /** Required ratio of passed cases (0..1). */
       minPassRate: z.number().min(0).max(1).default(1),
+      /**
+       * Every expectation of every case (expectedApi, expectedCss, expectedUi) must have been verified
+       * through the subsystem kit (expectApiRequests, expectCss, expectUi) in a passing test.
+       */
+      requireVerifiedExpectations: z.boolean().default(true),
     }),
   }),
   excel: z

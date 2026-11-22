@@ -81,8 +81,18 @@ Gate 4 passes only when:
   the file's own `casesSha256` and `baseline.json` — are writable by the agent and git-ignored, so they
   are never the only reference; inside the loop a missing or modified `baseline.json` also fails the gate,
 - every case ID has at least one test whose title contains `[<case ID>]`, and all of them passed,
+- every expectation of every case (`expectedApi`, `expectedCss`, each `expectedUi` line) was verified
+  through the subsystem kit (`expectApiRequests`, `expectCss`, `expectUi`) in a passing test. The kit
+  records each verified expectation as a test annotation; the generated tests may not write annotations
+  themselves and must await every kit assertion (`gates.subsystem.requireVerifiedExpectations`),
 - no test is skipped, no test refers to an unknown case ID,
 - the pass rate is ≥ `gates.subsystem.minPassRate` (default 1.0).
+
+Gate 4 starts its own `ng serve` on a free port for every run and never reuses a running server, so
+a server the agent left behind cannot answer for the working tree. Copilot CLI and the gate commands
+run in their own process group, which is killed when they exit; processes that escaped the group
+(re-parented to PID 1) are killed before the gates (`leftoverProcesses` in the telemetry).
+Gate 2 builds the `production` configuration, so the bundle budgets in `angular.json` apply.
 
 ## Telemetry (`run-history.json`)
 
