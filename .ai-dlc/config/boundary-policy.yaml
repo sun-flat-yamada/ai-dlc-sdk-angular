@@ -7,6 +7,13 @@ version: 1
 # Changed paths that match no zone: deny (violation) | allow
 unclassified: deny
 
+# When files of the deletable zone are deleted, the parts of extensible files that only reference
+# them may be removed or rewritten: their import, the array entry or top-level statement that loads
+# or uses them (a lazy route), and array entries that link to a route removed that way (a menu item).
+# Every other existing line of an extensible file must stay. false: extensible files stay strictly
+# append-only (a human removes such references before the run).
+removeReferencesToDeleted: true
+
 zones:
   immutable:
     description: Reuse by import; never edit, add, rename or delete files here.

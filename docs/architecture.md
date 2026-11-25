@@ -67,6 +67,16 @@ fingerprints it again. `.angular/cache` is deleted before the gates, and `dist/`
 Playwright report are regenerated (or deleted) by the gates themselves. Standalone `aidlc:gate` /
 `aidlc:guard` have no trusted fingerprint and check git-visible paths only.
 
+`extensible` files are append-only with one exception (`removeReferencesToDeleted`, issue #20): when
+files of the `deletable` zone are deleted, `lib/reference-removal.ts` parses the baseline version of each
+modified `extensible` file with the TypeScript compiler API and collects the units that only exist for
+those files: import / export declarations of them (relative specifiers only), the array element (or
+top-level statement) around a dynamic `import()` of them, array elements and statements that use an
+identifier imported from them, and array elements that mention the `path` of a route object removed that
+way (a menu entry). The change is accepted when every other non-blank baseline line is still present, in
+order, in the new file. Units that share a line with other code are not units, so the check fails
+closed. Accepted files are listed in the report (`referenceRemovals`).
+
 A violating file is restored to its baseline content **as a whole** (a new file in a protected zone is
 deleted). In an `extensible` file this also drops the allowed additions made in the same file; the
 violation is reported to the next iteration, which re-applies the change as a pure addition.

@@ -37,9 +37,12 @@ implementation step follows. You do not write application code in this step.
    `PanelStatusService`, `HardwareBridgeService`, `PanelButton`).
 5. List the append-only edits in `extensible` files (route, menu entry, provider) as exact lines to add.
 6. List `deletable` files that become obsolete and say whether to delete them now. Deleting is optional;
-   deleting a file that is still imported breaks the build — check imports first. A reference in an
-   `extensible` file (route, menu entry) cannot be removed: that is an existing line. Keep such files,
-   or flag the reference as an open question for a human to remove before the run.
+   deleting a file that is still imported breaks the build — check imports first. When you delete one,
+   also list the references in `extensible` files that go with it: its `import`, the array entry or
+   top-level statement that loads or uses it (route), and the array entries that link to that route
+   (menu item). Only those may be removed or rewritten; every other existing line stays. A reference
+   that shares a line with other code, uses a path alias or sits in a template cannot be removed: keep
+   the file, or flag it as an open question for a human.
 7. Flag anything the inputs leave open (missing operation, ambiguous behaviour, an Excel expectation
    that the bindings or the design do not explain). Choose the most
    conservative interpretation, record the assumption, and continue.

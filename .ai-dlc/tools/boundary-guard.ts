@@ -18,7 +18,12 @@ import {
 } from './lib/boundary.js';
 import { AidlcPaths, findRepoRoot, loadConfig, resolvePaths } from './lib/config.js';
 import { DependencyGuard } from './lib/dependency-guard.js';
-import { Git } from './lib/git.js';
+import { FileChange, Git } from './lib/git.js';
+import {
+  ExtensibleFileVersions,
+  explainReferenceRemovals,
+  ReferenceRemoval,
+} from './lib/reference-removal.js';
 import { RepositoryGuard } from './lib/repository-guard.js';
 import { isMain, log, runCli } from './lib/cli.js';
 import { enforceSandbox } from './lib/sandbox.js';
@@ -80,8 +85,13 @@ export async function runBoundaryGuard(
   const git = new Git(paths.root);
   const classifier = new BoundaryClassifier(loadBoundaryPolicy(paths.boundaryPolicy));
   const repo = options.repository ? await options.repository.check(options.revert) : [];
-  const changes = await git.changesSince(options.baseline);
-  const report = evaluateChanges(classifier, options.baseline, changes);
+  const { base, tree, changes } = await git.snapshotChanges(options.baseline);
+  const referenceRemovals = classifier.policy.removeReferencesToDeleted
+    ? await analyseReferenceRemovals(git, classifier, base, tree, changes)
+    : undefined;
+  const report = evaluateChanges(classifier, options.baseline, changes, {
+    ...(referenceRemovals ? { referenceRemovals } : {}),
+  });
   const reverted: string[] = [];
   if (options.revert) {
     for (const v of report.violations) {
@@ -126,9 +136,44 @@ export async function runBoundaryGuard(
       violations,
       ...(deps ? { dependencyViolations: deps.changed.length } : {}),
       ...(options.repository ? { repositoryViolations: repo.length } : {}),
+      ...(report.referenceRemovals.length
+        ? { referenceRemovals: report.referenceRemovals.length }
+        : {}),
     },
   };
   return { report, gate, reverted };
+}
+
+/**
+ * Reads both versions of each extensible file with removed lines, when files of the deletable zone
+ * were deleted, and decides whether the removed lines only reference those files (issue #20).
+ */
+async function analyseReferenceRemovals(
+  git: Git,
+  classifier: BoundaryClassifier,
+  base: string,
+  tree: string,
+  changes: readonly FileChange[],
+): Promise<Map<string, ReferenceRemoval> | undefined> {
+  const deleted = new Set(
+    changes.flatMap((c) => {
+      const gone = c.status === 'deleted' ? c.path : c.status === 'renamed' ? c.from : undefined;
+      return gone && classifier.classify(gone) === 'deletable' ? [gone] : [];
+    }),
+  );
+  if (!deleted.size) return undefined;
+  const files: ExtensibleFileVersions[] = [];
+  for (const c of changes) {
+    if (c.status !== 'modified' || !c.deleted || classifier.classify(c.path) !== 'extensible')
+      continue;
+    const [baseline, current] = await Promise.all([
+      git.readBlob(base, c.path),
+      git.readBlob(tree, c.path),
+    ]);
+    if (baseline !== undefined && current !== undefined)
+      files.push({ path: c.path, baseline, current });
+  }
+  return files.length ? explainReferenceRemovals(files, deleted) : undefined;
 }
 
 async function main(): Promise<number> {
@@ -157,6 +202,9 @@ async function main(): Promise<number> {
     log.info(`Baseline: ${baseline}`);
     for (const c of report.changes)
       log.info(`  ${c.status.padEnd(8)} ${c.zone.padEnd(12)} ${c.path}`);
+    for (const r of report.referenceRemovals)
+      for (const u of r.units.filter((x) => x.removed))
+        log.info(`  reference removed ${r.path}:${u.startLine}-${u.endLine} (${u.reason})`);
     for (const f of gate.failures) log.warn(`${f.where}: ${f.message}`);
     log.info(gate.summary);
   }

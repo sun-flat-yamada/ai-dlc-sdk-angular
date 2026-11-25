@@ -66,7 +66,8 @@ Coverage thresholds: statements 80, branches 70, functions 80, lines 80.
 ## Do not
 
 - Edit `immutable` files (core, shared, styles, config, inputs, harness) — reuse them.
-- Remove or reorder lines in `extensible` files.
+- Remove or reorder lines in `extensible` files. The only exception: the import, route entry and menu
+  entries of a `deletable` file you delete in the same change (see skill 01).
 - Invent operations, fields or texts that are not in the inputs. Record gaps in the change impact map.
 - Edit the generated subsystem tests to make them pass, other than fixing a selector or a wait (skill 03).
 - Skip tests (`it.skip`, `xit`, `.only`) or lower thresholds.

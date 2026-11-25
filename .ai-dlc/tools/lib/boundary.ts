@@ -3,6 +3,7 @@ import picomatch from 'picomatch';
 import { parse } from 'yaml';
 import { z } from 'zod';
 import type { FileChange } from './git.js';
+import type { ReferenceRemoval } from './reference-removal.js';
 
 export const ZONES = ['immutable', 'ignored', 'extensible', 'deletable', 'rebuildable'] as const;
 export type Zone = (typeof ZONES)[number];
@@ -17,6 +18,11 @@ export const boundaryPolicySchema = z.object({
   version: z.literal(1),
   /** What to do with a changed path that matches no zone. */
   unclassified: z.enum(['deny', 'allow']).default('deny'),
+  /**
+   * Allow removing (or rewriting) the parts of extensible files that only reference deleted files of
+   * the deletable zone: their imports, lazy routes, and entries that link to those routes (issue #20).
+   */
+  removeReferencesToDeleted: z.boolean().default(true),
   zones: z.object({
     immutable: zoneSchema.default({ description: '', paths: [] }),
     extensible: zoneSchema.default({ description: '', paths: [] }),
@@ -94,13 +100,20 @@ export interface BoundaryReport {
   violations: BoundaryViolation[];
   /** Lines / files changed per zone. */
   stats: Record<string, { files: number; added: number; deleted: number }>;
+  /** Extensible files whose removed lines were accepted as references to deleted files. */
+  referenceRemovals: ReferenceRemoval[];
+}
+
+export interface EvaluateOptions {
+  /** Analysis of modified extensible files (see `reference-removal.ts`), keyed by path. */
+  referenceRemovals?: ReadonlyMap<string, ReferenceRemoval>;
 }
 
 const MESSAGES: Record<ViolationRule, string> = {
   'immutable-changed':
     'Immutable zone: reuse it (import), never edit, add, rename or delete files here.',
   'extensible-lines-removed':
-    'Extensible zone is append-only: existing lines were changed or removed. Only add new entries.',
+    'Extensible zone is append-only: existing lines were changed or removed. Only add new entries (entries that only reference deleted files of the deletable zone may be removed).',
   'extensible-file-removed': 'Extensible zone: existing files must not be deleted or renamed.',
   'extensible-binary-change':
     'Extensible zone is append-only, but git could not count the changed lines (binary content). Keep the file plain text and only add new entries.',
@@ -113,8 +126,15 @@ export function evaluateChanges(
   classifier: BoundaryClassifier,
   baseline: string,
   changes: readonly FileChange[],
+  options: EvaluateOptions = {},
 ): BoundaryReport {
-  const report: BoundaryReport = { baseline, changes: [], violations: [], stats: {} };
+  const report: BoundaryReport = {
+    baseline,
+    changes: [],
+    violations: [],
+    stats: {},
+    referenceRemovals: [],
+  };
   for (const change of changes) {
     const zone = classifier.classify(change.path);
     const fromZone = change.from ? classifier.classify(change.from) : undefined;
@@ -124,14 +144,24 @@ export function evaluateChanges(
     stat.added += change.added ?? 0;
     stat.deleted += change.deleted ?? 0;
 
-    const rule = ruleFor(zone, change, fromZone, classifier.policy.unclassified);
+    let rule = ruleFor(zone, change, fromZone, classifier.policy.unclassified);
+    const removal = options.referenceRemovals?.get(change.path);
+    let detail = '';
+    if (rule === 'extensible-lines-removed' && removal) {
+      if (removal.allowed && classifier.policy.removeReferencesToDeleted) {
+        report.referenceRemovals.push(removal);
+        rule = undefined;
+      } else if (removal.firstUnexplainedLine !== undefined) {
+        detail = ` First changed or removed line: ${removal.firstUnexplainedLine}.`;
+      }
+    }
     if (rule) {
       report.violations.push({
         path: change.path,
         zone: fromZone === 'immutable' ? 'immutable' : zone,
         status: change.status,
         rule,
-        message: MESSAGES[rule],
+        message: `${MESSAGES[rule]}${detail}`,
         ...(change.from ? { from: change.from } : {}),
       });
     }
@@ -182,5 +212,10 @@ export function describePolicy(policy: BoundaryPolicy): string {
     for (const p of z.paths) lines.push(`  - \`${p}\``);
   }
   lines.push(`- **unclassified paths** — ${policy.unclassified === 'deny' ? 'denied' : 'allowed'}`);
+  if (policy.removeReferencesToDeleted) {
+    lines.push(
+      '- **references to deleted deletable files** — when you delete files of the deletable zone, remove the import, the array entry (route, provider) or the top-level statement that references them from extensible files, and the array entries (menu items) that link to a route removed that way. Each must start and end on its own lines. Keep every other existing line unchanged.',
+    );
+  }
   return lines.join('\n');
 }
