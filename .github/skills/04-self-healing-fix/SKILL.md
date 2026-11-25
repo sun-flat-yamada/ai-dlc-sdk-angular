@@ -15,7 +15,8 @@ run yet — fix what is reported, then run the local checks for the later gates 
 
 | Class | Typical signal | Fix in |
 | --- | --- | --- |
-| **B. Boundary violation** | Gate `boundary`: `[immutable/immutable-changed]`, `extensible-lines-removed`, `extensible-binary-change`, `out-of-scope`, `unclassified`, `[git/…]` (`.git/` metadata, refs or HEAD changed) | The change was already reverted. Achieve the goal inside an allowed zone (new file in a rebuildable folder, append-only line, reuse instead of edit). Never touch `.git/`, commit, stash or switch branches: the harness owns version control. |
+| **B. Boundary violation** | Gate `boundary`: `[immutable/immutable-changed]`, `extensible-lines-removed`, `extensible-binary-change`, `out-of-scope`, `unclassified`, `[git/…]` (`.git/` metadata, refs or HEAD changed) | The change was already reverted. Achieve the goal inside an allowed zone (new file in a rebuildable folder, append-only line, reuse instead of edit). For `extensible-lines-removed` the message names the first line that changed;
+only references to `deletable` files deleted in the same change may go (skill 01). Never touch `.git/`, commit, stash or switch branches: the harness owns version control. |
 | **D. Design not reflected** | Wrong text / class / color, missing `data-ui-id`, element hidden or enabled at the wrong time | Page template / styles vs. design HTML/CSS and `enabledWhen` / `visibleWhen` |
 | **A. API contract misread** | Request body / path differs from `expectedApi`, wrong field names, missing error handling | API service / request mapping vs. OpenAPI and `ui-bindings.yaml` |
 | **R. Reuse contract broken** | Duplicate HTTP / beep / polling logic, `HttpClient` injected, `ApiError.kind` ignored | Use the module from `.ai-dlc/references/reusable-catalog.md` |

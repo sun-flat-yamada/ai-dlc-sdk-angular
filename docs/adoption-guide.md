@@ -31,11 +31,17 @@ If your project needs extra hosts (private npm registry, internal APIs) add them
 3. **`aidlc.config.yaml`** — Angular project name, gate commands (match your `package.json`), coverage
    file and thresholds, Copilot CLI permissions, QCD unit costs.
 4. **`playwright.subsystem.config.ts`** — dev-server command (Gate 4 picks the port itself).
-5. **Replacing `deletable` code** — `extensible` files are append-only, so the agent can never remove
-   the lines that still reference old code (a route's `loadComponent`, a menu entry). Deleting the old
-   files alone breaks the build, so a run that has to replace an old screen fails until the iteration
-   limit. Before the run, remove (or redirect) those references yourself and commit; the agent then
-   deletes or replaces the now unreferenced `deletable` files.
+5. **Replacing `deletable` code** — `extensible` files are append-only, except for the parts that only
+   reference `deletable` files deleted in the same change (`removeReferencesToDeleted: true` in
+   `boundary-policy.yaml`, the default). When the agent deletes an old screen it may remove or rewrite
+   its `import`, the array entry or top-level statement that loads or uses it (a lazy route), and the
+   array entries that link to a route removed that way (a menu item with `route: '/old-path'`). Every
+   other existing line must stay. The guard finds these parts with the TypeScript AST, so they must
+   start and end on their own lines (one route object per line range, as Prettier formats them), and
+   only relative import paths are followed (not path aliases such as `@app/...`). References it cannot
+   attribute — a `routerLink` in a template, an alias import, an entry sharing a line with other code
+   — are still violations: remove those yourself before the run and commit. Set the option to `false`
+   to keep `extensible` files strictly append-only.
 
 ## 3. Prepare one development item
 

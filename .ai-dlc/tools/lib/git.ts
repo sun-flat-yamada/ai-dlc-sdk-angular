@@ -128,6 +128,16 @@ export class Git {
    * are hidden by a `.gitignore` that is new or changed since the baseline are reported as well.
    */
   async changesSince(baseline: string): Promise<FileChange[]> {
+    return (await this.snapshotChanges(baseline)).changes;
+  }
+
+  /**
+   * Same as {@link changesSince}, plus the resolved baseline commit and the tree object of the
+   * working-tree snapshot that was compared, so that callers can read both versions of a file.
+   */
+  async snapshotChanges(
+    baseline: string,
+  ): Promise<{ base: string; tree: string; changes: FileChange[] }> {
     const base = await this.resolve(baseline);
     // One temporary index for the snapshot and the ignored-file listing (never the real index).
     const { tree, hidden, excluded } = await this.withTemporaryIndex(async (env) => {
@@ -194,7 +204,20 @@ export class Git {
         changes.set(file, { path: file, status: 'added' });
       }
     }
-    return [...changes.values()].sort((x, y) => x.path.localeCompare(y.path));
+    return {
+      base,
+      tree,
+      changes: [...changes.values()].sort((x, y) => x.path.localeCompare(y.path)),
+    };
+  }
+
+  /** Content of `file` in a commit or tree (`undefined` when it does not exist there). */
+  async readBlob(treeish: string, file: string): Promise<string | undefined> {
+    const shown = await exec(
+      ['git', ...hardenedGitConfig(this.cwd), 'cat-file', 'blob', `${treeish}:${file}`],
+      { cwd: this.cwd, env: { ...HARDENED_GIT_ENV } },
+    );
+    return shown.exitCode === 0 ? shown.output : undefined;
   }
 
   /**
